@@ -6,7 +6,7 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 일월화수목금토 정렬 및 공휴일 이름 최적화
+# CSS 스타일 (이전과 동일하되 목록 가독성 추가)
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
@@ -43,11 +43,17 @@ st.markdown("""
     .cal-exp { color: #ff4b4b; font-size: 0.65rem; font-weight: bold; margin-top: 1px; }
     .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
+    
+    /* 목록 보기 카드 스타일 */
+    .record-card { 
+        background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #eee; 
+        margin-bottom: 6px; border-left: 5px solid #007bff;
+    }
     div[data-testid="stSelectbox"] label { display: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# ✅ 2026-2028 국정공휴일 데이터 조사 결과
+# 2026-2028 공휴일 데이터
 def get_holiday_info(y, m, d):
     h = {
         2026: {(1,1):"신정", (2,16):"설날", (2,17):"설날", (2,18):"설날", (3,1):"삼일절", (3,2):"대체", (5,5):"어린이날", (5,24):"석탄일", (5,25):"대체", (6,6):"현충일", (8,15):"광복절", (8,17):"대체", (9,24):"추석", (9,25):"추석", (9,26):"추석", (10,3):"개천절", (10,5):"대체", (10,9):"한글날", (12,25):"성탄절"},
@@ -72,39 +78,41 @@ def format_man(amount):
     val = round(amount / 10000, 1)
     return f"{int(val) if val == int(val) else val}만"
 
-# ✅ 현재 시간 기준 초기값 설정 (2026년 대응)
-now = datetime.now()
-if 'view_year' not in st.session_state: st.session_state.view_year = now.year
-if 'view_month' not in st.session_state: st.session_state.view_month = now.month
+# 초기값 세팅
+if 'view_year' not in st.session_state: st.session_state.view_year = 2026
+if 'view_month' not in st.session_state: st.session_state.view_month = 2
 
 st.title("📔 범 & 젼")
 user_tabs = st.tabs(["범", "젼"])
-calendar.setfirstweekday(calendar.SUNDAY) # 일요일 시작 국룰
+calendar.setfirstweekday(calendar.SUNDAY)
 
 for i, user in enumerate(["beom", "jyeon"]):
     with user_tabs[i]:
         df = load_data(user)
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_{user}", label_visibility="collapsed")
         
+        # 1. 상단 공통 연/월 선택창
+        c1, c2 = st.columns(2)
+        with c1: 
+            y_list = [f"{y}년" for y in range(2024, 2029)]
+            sel_y = st.selectbox("Y", y_list, index=y_list.index(f"{st.session_state.view_year}년"), key=f"y_{user}")
+            st.session_state.view_year = int(sel_y.replace("년", ""))
+        with c2:
+            sel_m = st.selectbox("M", [f"{m}월" for m in range(1, 13)], index=st.session_state.view_month-1, key=f"m_{user}")
+            st.session_state.view_month = int(sel_m.replace("월", ""))
+
+        # 2. 데이터 필터링 및 요약
         df_view = df[(df['날짜'].apply(lambda x: x.year) == st.session_state.view_year) & (df['날짜'].apply(lambda x: x.month) == st.session_state.view_month)] if not df.empty else pd.DataFrame()
         t_inc, t_exp = df_view[df_view['구분'] == '수입']['금액'].sum(), df_view[df_view['구분'] != '수입']['금액'].sum()
 
-        if v_mode == "📅":
-            st.markdown(f'<div class="summary-box"><div class="summary-item">수입 <span class="val-inc">+{t_inc:,}</span></div><div class="summary-item">지출 <span class="val-exp">-{t_exp:,}</span></div><div class="summary-item">잔액 <b>{t_inc-t_exp:,}</b></div></div>', unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            with c1: 
-                y_list = [f"{y}년" for y in range(2024, 2029)]
-                sel_y = st.selectbox("Y", y_list, index=y_list.index(f"{st.session_state.view_year}년"), key=f"y_{user}")
-                st.session_state.view_year = int(sel_y.replace("년", ""))
-            with c2:
-                sel_m = st.selectbox("M", [f"{m}월" for m in range(1, 13)], index=st.session_state.view_month-1, key=f"m_{user}")
-                st.session_state.view_month = int(sel_m.replace("월", ""))
+        st.markdown(f'<div class="summary-box"><div class="summary-item">수입 <span class="val-inc">+{t_inc:,}</span></div><div class="summary-item">지출 <span class="val-exp">-{t_exp:,}</span></div><div class="summary-item">잔액 <b>{t_inc-t_exp:,}</b></div></div>', unsafe_allow_html=True)
 
+        if v_mode == "📅":
+            # 달력 모드 (기존과 동일)
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             grid = '<div class="calendar-grid">'
             for idx, h in enumerate(["일", "월", "화", "수", "목", "금", "토"]):
                 grid += f'<div class="day-header {"sun-holiday" if idx==0 else ("sat" if idx==6 else "")}">{h}</div>'
-            
             for week in cal:
                 for idx, day in enumerate(week):
                     if day != 0:
@@ -113,7 +121,6 @@ for i, user in enumerate(["beom", "jyeon"]):
                         curr_d = date(st.session_state.view_year, st.session_state.view_month, day)
                         d_df = df_view[df_view['날짜'] == curr_d] if not df_view.empty else pd.DataFrame()
                         inc, exp = d_df[d_df['구분'] == '수입']['금액'].sum(), d_df[d_df['구분'] != '수입']['금액'].sum()
-                        
                         grid += f'<div class="cal-day {"today-marker" if curr_d==date.today() else ""}">'
                         grid += f'<div class="date-row"><div class="cal-date {d_cls}">{day}</div>'
                         if h_name: grid += f'<div class="holiday-name {d_cls}">{h_name}</div>'
@@ -123,8 +130,26 @@ for i, user in enumerate(["beom", "jyeon"]):
                         grid += '</div>'
                     else: grid += '<div class="cal-day" style="background:none; border:none;"></div>'
             st.markdown(grid + '</div>', unsafe_allow_html=True)
+            
         else:
-            st.dataframe(df_view.sort_values("날짜", ascending=False), use_container_width=True, hide_index=True)
+            # 📋 목록 모드: 빠른 날짜가 위로 오게 정렬
+            if not df_view.empty:
+                df_sorted = df_view.sort_values(by="날짜", ascending=True) # 오름차순 정렬
+                for idx, row in df_sorted.iterrows():
+                    st.markdown(f"""
+                        <div class="record-card">
+                            <div style="display:flex; justify-content:space-between; font-size:0.85rem;">
+                                <span><b>{row['날짜'].strftime('%m/%d')}</b> ({row['구분']})</span>
+                                <span style="color:#666;">{row['카테고리']}</span>
+                            </div>
+                            <div style="font-size:1.05rem; font-weight:bold; margin-top:3px;">
+                                {row['금액']:,}원
+                            </div>
+                            <div style="font-size:0.8rem; color:#444; margin-top:2px;">📝 {row['내역']}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info(f"{st.session_state.view_month}월 내역이 없습니다.")
 
         st.write("---")
         with st.expander("+ 내역 추가", expanded=True):
