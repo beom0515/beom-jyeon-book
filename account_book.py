@@ -6,12 +6,12 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 모바일 사파리 맞춤형 레이아웃
+# ✅ CSS: 모바일 최적화 및 UI 정렬
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* 달력 본체 7열 고정 */
+    /* 달력 그리드 7열 강제 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -30,9 +30,12 @@ st.markdown("""
     .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
 
-    /* 선택 상자 라벨 숨기기 및 간격 조정 */
+    /* 선택 상자 라벨 숨기기 및 간격 */
     div[data-testid="stSelectbox"] label { display: none; }
     div[data-testid="stHorizontalBlock"] { gap: 5px !important; }
+    
+    /* 리스트 카드 스타일 */
+    .record-card { background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid #007bff; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -43,8 +46,11 @@ def load_data(sheet_name):
     try:
         df = conn.read(worksheet=sheet_name, ttl=5)
         if df is None or df.empty: return pd.DataFrame(columns=cols)
+        # 날짜와 금액 데이터 정제
         df['날짜'] = pd.to_datetime(df['날짜']).dt.date
         df['금액'] = pd.to_numeric(df['금액'], errors='coerce').fillna(0).astype(int)
+        # 만약 '내역' 컬럼이 없으면 빈 값으로 생성
+        if '내역' not in df.columns: df['내역'] = ""
         return df[cols]
     except Exception: return pd.DataFrame(columns=cols)
 
@@ -53,7 +59,7 @@ def format_man(amount):
     val = round(amount / 10000, 1)
     return f"{int(val) if val == int(val) else val}만"
 
-# 현재 날짜 기준 초기화
+# 세션 상태 초기화
 if 'view_year' not in st.session_state: st.session_state.view_year = datetime.now().year
 if 'view_month' not in st.session_state: st.session_state.view_month = datetime.now().month
 
@@ -68,14 +74,14 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # ✅ [연도/월 선택] 5:5로 배치 - 사파리에서도 이 정도는 안 깨집니다!
+            # 연/월 선택 (사파리 줄바꿈 방지용 2분할)
             sel_col1, sel_col2 = st.columns(2)
             with sel_col1:
-                year_list = list(range(datetime.now().year - 1, datetime.now().year + 3))
-                st.session_state.view_year = st.selectbox("연도", year_list, index=year_list.index(st.session_state.view_year), key=f"sel_y_{user}")
+                year_list = list(range(2024, 2030))
+                st.session_state.view_year = st.selectbox("Y", year_list, index=year_list.index(st.session_state.view_year), key=f"sel_y_{user}")
             with sel_col2:
                 month_list = list(range(1, 13))
-                st.session_state.view_month = st.selectbox("월", month_list, index=month_list.index(st.session_state.view_month), key=f"sel_m_{user}")
+                st.session_state.view_month = st.selectbox("M", month_list, index=month_list.index(st.session_state.view_month), key=f"sel_m_{user}")
 
             # 달력 본체
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
@@ -99,26 +105,45 @@ for i, tab in enumerate(user_tabs):
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 목록 보기 (생략 없이 유지)
+            # 리스트 보기 (상세내역 포함 표시)
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
-                    st.markdown(f"""<div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid #007bff;">
+                    st.markdown(f"""<div class="record-card">
                         <div style="font-size:0.85rem;"><b>{row['날짜']}</b> | {row['구분']}</div>
                         <div style="font-size:1rem; font-weight:bold;">{row['금액']:,}원 ({row['카테고리']})</div>
+                        <div style="font-size:0.8rem; color:#666;">📝 {row['내역']}</div>
                     </div>""", unsafe_allow_html=True)
                     if st.button("🗑️", key=f"del_{user}_{idx}"):
                         new_df = df.drop(row['index']); conn.update(worksheet=user, data=new_df); st.rerun()
             else: st.info("내역 없음")
 
         st.write("---")
-        with st.expander("+ 추가"):
+        # ✅ 상세내역(내역) 필드 복구 완료
+        with st.expander("+ 내역 추가", expanded=True):
             sel_d = st.date_input("날짜", value=date.today(), key=f"date_{user}")
             m_t = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"type_{user}")
-            m_a = st.number_input("금액", min_value=0, step=1000, key=f"amt_{user}")
-            if st.button("입력", key=f"save_{user}", use_container_width=True):
-                new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": "기타", "내역": "기타", "금액": m_a}])
+            c_list = ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타", "용돈"]
+            m_c = st.selectbox("카테고리", c_list, key=f"cat_{user}")
+            m_a = st.number_input("금액(원)", min_value=0, step=1000, key=f"amt_{user}")
+            m_i = st.text_input("상세내역(메모)", key=f"info_{user}", placeholder="어디서 썼나요?")
+            
+            if st.button("저장하기", key=f"save_{user}", use_container_width=True):
+                # 상세내역이 비어있으면 카테고리명으로 대체
+                final_info = m_i if m_i.strip() != "" else m_c
+                new_row = pd.DataFrame([{
+                    "날짜": sel_d.strftime("%Y-%m-%d"), 
+                    "구분": m_t, 
+                    "카테고리": m_c, 
+                    "내역": final_info, 
+                    "금액": m_a
+                }])
+                
+                # 저장 대상 결정 (우리 면 둘 다, 아니면 본인 것만)
                 targets = ["beom", "jyeon"] if m_t == "우리" else ([user])
                 for t in targets:
-                    curr_df = load_data(t); upd_df = pd.concat([curr_df, new_row], ignore_index=True); conn.update(worksheet=t, data=upd_df)
+                    curr_df = load_data(t)
+                    upd_df = pd.concat([curr_df, new_row], ignore_index=True)
+                    conn.update(worksheet=t, data=upd_df)
+                st.success("저장 완료!")
                 st.rerun()
