@@ -10,8 +10,6 @@ st.set_page_config(page_title="범 & 젼", layout="wide")
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
-    
-    /* 달력 그리드 7열 강제 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -29,11 +27,8 @@ st.markdown("""
     .cal-exp { color: #ff4b4b; font-size: 0.65rem; font-weight: bold; }
     .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
-
-    /* 선택 상자 라벨 숨기기 */
     div[data-testid="stSelectbox"] label { display: none; }
     div[data-testid="stHorizontalBlock"] { gap: 5px !important; }
-    
     .record-card { background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid #007bff; }
     </style>
     """, unsafe_allow_html=True)
@@ -70,7 +65,6 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # 연/월 선택
             sel_col1, sel_col2 = st.columns(2)
             with sel_col1:
                 year_list = list(range(2024, 2030))
@@ -79,7 +73,6 @@ for i, tab in enumerate(user_tabs):
                 month_list = list(range(1, 13))
                 st.session_state.view_month = st.selectbox("M", month_list, index=month_list.index(st.session_state.view_month), key=f"sel_m_{user}")
 
-            # 달력
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             grid_html = '<div class="calendar-grid">'
             for d in ["월", "화", "수", "목", "금", "토", "일"]:
@@ -101,7 +94,6 @@ for i, tab in enumerate(user_tabs):
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 리스트 보기
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
@@ -115,17 +107,22 @@ for i, tab in enumerate(user_tabs):
             else: st.info("내역 없음")
 
         st.write("---")
-        # ✅ 요청하신 대로 "상세내역"으로만 표시
         with st.expander("+ 내역 추가", expanded=True):
             sel_d = st.date_input("날짜", value=date.today(), key=f"date_{user}")
+            # 1. 구분 먼저 선택
             m_t = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"type_{user}")
-            c_list = ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타", "용돈"]
+            
+            # 2. 구분에 따라 카테고리 리스트 변경 (필터링 로직)
+            if m_t == "수입":
+                c_list = ["용돈", "기타"]
+            else:
+                c_list = ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타"]
+            
             m_c = st.selectbox("카테고리", c_list, key=f"cat_{user}")
             m_a = st.number_input("금액(원)", min_value=0, step=1000, key=f"amt_{user}")
-            m_i = st.text_input("상세내역", key=f"info_{user}") # 플레이스홀더 삭제
+            m_i = st.text_input("상세내역", key=f"info_{user}")
             
             if st.button("저장하기", key=f"save_{user}", use_container_width=True):
-                # ✅ 상세내역 안 적으면 카테고리명으로 저장
                 final_info = m_i if m_i.strip() != "" else m_c
                 new_row = pd.DataFrame([{
                     "날짜": sel_d.strftime("%Y-%m-%d"), 
