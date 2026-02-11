@@ -6,12 +6,22 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 모바일에서 무조건 한 줄에 7칸 나오게 강제 고정
+# ✅ CSS: 컨트롤러 및 달력 강제 한 줄 고정
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* 7열 그리드 시스템 */
+    /* 상단 월 이동 컨트롤러 한 줄 고정 */
+    .month-ctrl {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    .month-title { font-size: 1.1rem; font-weight: bold; }
+
+    /* 7열 달력 그리드 강제 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -29,7 +39,7 @@ st.markdown("""
 
     .cal-day { 
         border: 1px solid #eee; 
-        height: 65px; 
+        height: 60px; 
         border-radius: 4px; 
         background-color: #fdfdfd;
         display: flex;
@@ -50,6 +60,9 @@ st.markdown("""
     .record-row { margin-bottom: 2px; font-size: 0.85rem; }
     .record-label { color: #666; font-size: 0.75rem; margin-right: 5px; }
     .record-amount { font-weight: bold; color: #333; font-size: 1rem; }
+    
+    /* 버튼 스타일 통일 */
+    .stButton>button { width: 100%; padding: 2px; border-radius: 6px; height: 35px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -96,22 +109,22 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            c1, c2, c3 = st.columns([1, 2, 1])
-            with c1: 
+            # ✅ 상단 컨트롤러: st.columns 대신 직접 버튼과 제목 배치
+            ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1, 2, 1])
+            with ctrl_col1:
                 if st.button("◀", key=f"prev_{user}"): change_month(-1); st.rerun()
-            with c2: st.markdown(f"<center><b>{st.session_state.view_year}.{st.session_state.view_month}</b></center>", unsafe_allow_html=True)
-            with c3: 
+            with ctrl_col2:
+                st.markdown(f"<div style='text-align:center; padding-top:5px;'><b>{st.session_state.view_year}.{st.session_state.view_month}</b></div>", unsafe_allow_html=True)
+            with ctrl_col3:
                 if st.button("▶", key=f"next_{user}"): change_month(1); st.rerun()
 
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             
             # HTML 그리드 시작
             grid_html = '<div class="calendar-grid">'
-            # 요일 헤더 추가
             for d in ["월", "화", "수", "목", "금", "토", "일"]:
                 grid_html += f'<div class="day-header">{d}</div>'
             
-            # 날짜 칸 추가
             for week in cal:
                 for day in week:
                     if day != 0:
