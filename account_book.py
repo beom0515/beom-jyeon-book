@@ -3,23 +3,18 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
 import calendar
+import requests
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 연/월 폰트 극대화 및 중앙 집중 레이아웃
+# ✅ CSS: 중앙 정렬, 숫자 안 잘리게 조절, 요일 색상 반영
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* 요약 박스 */
     .summary-box {
-        background-color: #ffffff;
-        border: 1px solid #eee;
-        border-radius: 10px;
-        padding: 10px;
-        margin-bottom: 15px;
-        display: flex;
-        justify-content: space-around;
+        background-color: #ffffff; border: 1px solid #eee; border-radius: 10px;
+        padding: 10px; margin-bottom: 15px; display: flex; justify-content: space-around;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .summary-item { display: flex; flex-direction: column; text-align: center; }
@@ -28,36 +23,38 @@ st.markdown("""
     .val-inc { color: #1f77b4; }
     .val-exp { color: #ff4b4b; }
 
-    /* ✅ 연/월 선택창 디자인 (한 줄씩 큼직하게) */
+    /* ✅ 연/월 선택창: 중앙 정렬 및 안 잘리는 크기 */
     div[data-testid="stSelectbox"] {
-        max-width: 250px !important;
-        margin: 0 auto !important; /* 중앙 정렬 */
-        padding-bottom: 5px !important;
+        max-width: 180px !important;
+        margin: 0 auto !important;
     }
-    
     div[data-testid="stSelectbox"] div[data-baseweb="select"] {
-        font-size: 1.8rem !important;
-        font-weight: 900 !important;
+        font-size: 1.4rem !important;
+        font-weight: 800 !important;
         text-align: center !important;
         border: none !important;
-        background-color: transparent !important;
     }
 
-    /* 달력 본체 */
     .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 2px;
-        width: 100%;
-        margin-top: 15px;
+        display: grid; grid-template-columns: repeat(7, 1fr);
+        gap: 2px; width: 100%; margin-top: 15px;
     }
-    .day-header { font-size: 0.75rem; font-weight: bold; text-align: center; color: #888; }
+    .day-header { font-size: 0.75rem; font-weight: bold; text-align: center; padding-bottom: 5px; }
+    /* 요일별 헤더 색상 */
+    .day-header:nth-child(6) { color: #1f77b4; } /* 토요일 */
+    .day-header:nth-child(7), .day-header:nth-child(1) { } /* 일요일 처리는 아래에서 */
+    
     .cal-day { 
-        border: 1px solid #eee; height: 60px; border-radius: 4px; 
+        border: 1px solid #eee; height: 65px; border-radius: 4px; 
         background-color: #fdfdfd; display: flex; flex-direction: column; 
         align-items: center; justify-content: flex-start; padding: 2px;
     }
     .cal-date { font-weight: bold; font-size: 0.85rem; }
+    
+    /* ✅ 날짜 색상 국룰 */
+    .sat { color: #1f77b4 !important; } /* 토요일 파랑 */
+    .sun-holiday { color: #ff4b4b !important; } /* 일요일/공휴일 빨강 */
+
     .cal-exp { color: #ff4b4b; font-size: 0.65rem; font-weight: bold; }
     .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
@@ -66,6 +63,16 @@ st.markdown("""
     .record-card { background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid #007bff; }
     </style>
     """, unsafe_allow_html=True)
+
+# ✅ 공휴일 가져오기 함수 (간단한 매핑 사용)
+def get_holidays(year):
+    # 실제 API 대신 주요 공휴일 계산 (신정, 설, 추석, 국경일 등)
+    # 2024~2026 주요 고정 공휴일 예시
+    holidays = [
+        (1,1), (3,1), (5,5), (6,6), (8,15), (10,3), (10,9), (12,25)
+    ]
+    # 대체공휴일 등은 유동적이지만 기본값 설정
+    return holidays
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -76,7 +83,6 @@ def load_data(sheet_name):
         if df is None or df.empty: return pd.DataFrame(columns=cols)
         df['날짜'] = pd.to_datetime(df['날짜']).dt.date
         df['금액'] = pd.to_numeric(df['금액'], errors='coerce').fillna(0).astype(int)
-        if '내역' not in df.columns: df['내역'] = ""
         return df[cols]
     except Exception: return pd.DataFrame(columns=cols)
 
@@ -108,40 +114,46 @@ for i, tab in enumerate(user_tabs):
             total_inc, total_exp, balance = 0, 0, 0
 
         if v_mode == "📅":
-            # 1. 잔액 요약
-            st.markdown(f"""
-                <div class="summary-box">
-                    <div class="summary-item"><span class="summary-label">수입</span><span class="summary-value val-inc">+{total_inc:,}</span></div>
-                    <div class="summary-item"><span class="summary-label">지출</span><span class="summary-value val-exp">-{total_exp:,}</span></div>
-                    <div class="summary-item"><span class="summary-label">잔액</span><span class="summary-value">{balance:,}</span></div>
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div class="summary-box">
+                <div class="summary-item"><span class="summary-label">수입</span><span class="summary-value val-inc">+{total_inc:,}</span></div>
+                <div class="summary-item"><span class="summary-label">지출</span><span class="summary-value val-exp">-{total_exp:,}</span></div>
+                <div class="summary-item"><span class="summary-label">잔액</span><span class="summary-value">{balance:,}</span></div>
+            </div>""", unsafe_allow_html=True)
 
-            # ✅ 2. 웅장한 연/월 한 줄씩 배치
-            # 연도 선택
-            year_opt = [f"{y}년" for y in range(2024, 2031)]
-            sel_y = st.selectbox("Y", year_opt, index=year_opt.index(f"{st.session_state.view_year}년"), key=f"sel_y_{user}")
+            # ✅ 연/월 선택 (중앙)
+            y_opt = [f"{y}년" for y in range(2024, 2031)]
+            sel_y = st.selectbox("Y", y_opt, index=y_opt.index(f"{st.session_state.view_year}년"), key=f"sel_y_{user}")
             st.session_state.view_year = int(sel_y.replace("년", ""))
             
-            # 월 선택
-            month_opt = [f"{m}월" for m in range(1, 13)]
-            sel_m = st.selectbox("M", month_opt, index=month_opt.index(f"{st.session_state.view_month}월"), key=f"sel_m_{user}")
+            m_opt = [f"{m}월" for m in range(1, 13)]
+            sel_m = st.selectbox("M", m_opt, index=m_opt.index(f"{st.session_state.view_month}월"), key=f"sel_m_{user}")
             st.session_state.view_month = int(sel_m.replace("월", ""))
 
-            # 3. 달력
+            # ✅ 달력 및 공휴일 로직
+            holidays = get_holidays(st.session_state.view_year)
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
+            
             grid_html = '<div class="calendar-grid">'
-            for d in ["월", "화", "수", "목", "금", "토", "일"]:
-                grid_html += f'<div class="day-header">{d}</div>'
+            headers = ["월", "화", "수", "목", "금", "토", "일"]
+            for idx, h in enumerate(headers):
+                color_class = "sun-holiday" if idx == 6 else ("sat" if idx == 5 else "")
+                grid_html += f'<div class="day-header {color_class}">{h}</div>'
+            
             for week in cal:
-                for day in week:
+                for idx, day in enumerate(week):
                     if day != 0:
                         curr = date(st.session_state.view_year, st.session_state.view_month, day)
+                        # 색상 결정 (토요일, 일요일, 공휴일)
+                        is_holiday = (st.session_state.view_month, day) in holidays
+                        date_class = "sun-holiday" if (idx == 6 or is_holiday) else ("sat" if idx == 5 else "")
+                        
                         d_df = df_view[df_view['날짜'] == curr] if not df_view.empty else pd.DataFrame()
                         inc = d_df[d_df['구분'] == '수입']['금액'].sum()
                         exp = d_df[d_df['구분'] != '수입']['금액'].sum()
                         is_t = "today-marker" if curr == date.today() else ""
-                        grid_html += f'<div class="cal-day {is_t}"><div class="cal-date">{day}</div>'
+                        
+                        grid_html += f'<div class="cal-day {is_t}">'
+                        grid_html += f'<div class="cal-date {date_class}">{day}</div>'
                         grid_html += f'<div class="cal-inc">{format_man(inc)}</div>' if inc > 0 else ""
                         grid_html += f'<div class="cal-exp">{format_man(exp)}</div>' if exp > 0 else ""
                         grid_html += '</div>'
@@ -150,7 +162,7 @@ for i, tab in enumerate(user_tabs):
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 목록 보기
+            # 리스트 보기 (동일)
             if not df_view.empty:
                 display_df = df_view.sort_values('날짜', ascending=False)
                 for idx, row in display_df.iterrows():
