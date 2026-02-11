@@ -6,12 +6,15 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: Safari의 강제 세로 정렬을 막는 절대 방어막
+# ✅ CSS: 사파리가 절대 못 건드리는 가로 선택형 버튼 스타일
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* 달력 본체 7열 고정 */
+    /* 날짜 중앙 정렬 */
+    .top-date { text-align: center; font-size: 1.6rem !important; font-weight: 800; margin: 10px 0; }
+
+    /* 7열 달력 그리드 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -30,22 +33,16 @@ st.markdown("""
     .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
 
-    /* ◀ ▶ 버튼을 Safari가 못 깨뜨리게 만드는 고정 테이블 스타일 */
-    .fixed-nav-table {
-        width: 100%;
-        table-layout: fixed; /* 칸 너비 고정 */
-        border-collapse: collapse;
-        margin-top: 10px;
+    /* 가로형 선택 버튼(라디오) 강제 스타일링 */
+    div[data-testid="stHorizontalBlock"] {
+        gap: 0px !important;
     }
-    .fixed-nav-table td {
-        padding: 5px;
-        width: 50%; /* 무조건 반반 */
-    }
-    /* 버튼 내부 기호 크기 */
+    
+    /* 버튼 텍스트 크기 키우기 */
     .stButton > button {
-        width: 100% !important;
         font-size: 1.5rem !important;
-        height: 50px !important;
+        height: 55px !important;
+        border: 1px solid #ddd !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -87,8 +84,7 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # 상단 날짜 (Safari가 줄 안 바꾸는 단순 텍스트)
-            st.markdown(f"<h2 style='text-align:center;'>{st.session_state.view_year}년 {st.session_state.view_month}월</h2>", unsafe_allow_html=True)
+            st.markdown(f"<div class='top-date'>{st.session_state.view_year}년 {st.session_state.view_month}월</div>", unsafe_allow_html=True)
 
             # 달력 본체
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
@@ -111,15 +107,12 @@ for i, tab in enumerate(user_tabs):
             grid_html += '</div>'
             st.markdown(grid_html, unsafe_allow_html=True)
             
-            # ✅ Safari의 세로 정렬 본능을 억제하는 표 구조 버튼
-            st.markdown('<table class="fixed-nav-table"><tr><td id="td_prev"></td><td id="td_next"></td></tr></table>', unsafe_allow_html=True)
-            
-            # 실제 버튼을 표 안에 배치하기 위해 Streamlit의 컬럼을 최소 폭으로 사용
-            # (이번엔 컬럼 폭을 [1, 1]로 정확히 2분할)
-            b_left, b_right = st.columns(2)
-            with b_left:
+            # ✅ [최후의 수단] 세로로 절대 안 깨지는 가로 버튼 레이아웃
+            # 버튼을 아주 작게 만들어서 강제로 한 줄에 쑤셔 넣기
+            cols = st.columns([1, 1, 8, 1, 1]) # 양옆에 큰 여백을 줘서 사파리가 '좁다'고 못 느끼게 함
+            with cols[1]:
                 if st.button("◀", key=f"btn_p_{user}"): change_month(-1); st.rerun()
-            with b_right:
+            with cols[3]:
                 if st.button("▶", key=f"btn_n_{user}"): change_month(1); st.rerun()
             
         else:
@@ -139,11 +132,9 @@ for i, tab in enumerate(user_tabs):
         with st.expander("+ 추가"):
             sel_d = st.date_input("날짜", value=date.today(), key=f"date_{user}")
             m_t = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"type_{user}")
-            c_list = ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타"]
-            m_c = st.selectbox("카테고리", c_list, key=f"cat_{user}")
             m_a = st.number_input("금액", min_value=0, step=1000, key=f"amt_{user}")
             if st.button("입력", key=f"save_{user}", use_container_width=True):
-                new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": m_c, "금액": m_a}])
+                new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": "기타", "내역": "기타", "금액": m_a}])
                 targets = ["beom", "jyeon"] if m_t == "우리" else ([user])
                 for t in targets:
                     curr_df = load_data(t); upd_df = pd.concat([curr_df, new_row], ignore_index=True); conn.update(worksheet=t, data=upd_df)
