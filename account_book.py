@@ -6,37 +6,32 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 컨트롤러 및 달력 완전 고정
+# ✅ CSS: 컨트롤러 및 달력 완전 박멸 (한 줄 고정)
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* ◀ 2026.2 ▶ 한 줄 강제 고정 */
-    .header-wrapper {
+    /* ◀ 2026.2 ▶ 강제 한 줄 고정 레이아웃 */
+    .nav-container {
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        background-color: #f8f9fa;
-        padding: 10px;
-        border-radius: 10px;
+        justify-content: space-between;
+        width: 100%;
         margin-bottom: 10px;
+        gap: 0;
     }
-    .month-text {
-        font-size: 1.4rem !important;
+    .nav-box {
+        flex: 1;
+        text-align: center;
+    }
+    .month-text-large {
+        font-size: 1.5rem !important;
         font-weight: 800;
         color: #333;
-        margin: 0;
+        white-space: nowrap;
     }
-    .nav-btn-custom {
-        background: #007bff;
-        color: white;
-        border: none;
-        padding: 5px 15px;
-        border-radius: 5px;
-        font-weight: bold;
-    }
-
-    /* 7열 달력 그리드 고정 */
+    
+    /* 달력 그리드 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -50,8 +45,8 @@ st.markdown("""
         align-items: center; justify-content: flex-start; padding: 2px;
     }
     .cal-date { font-weight: bold; font-size: 0.8rem; }
-    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; line-height: 1; }
-    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; line-height: 1; }
+    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; }
+    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
     </style>
     """, unsafe_allow_html=True)
@@ -61,7 +56,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data(sheet_name):
     cols = ["날짜", "구분", "카테고리", "내역", "금액"]
     try:
-        df = conn.read(worksheet=sheet_name, ttl=10)
+        df = conn.read(worksheet=sheet_name, ttl=5)
         if df is None or df.empty: return pd.DataFrame(columns=cols)
         df['날짜'] = pd.to_datetime(df['날짜']).dt.date
         df['금액'] = pd.to_numeric(df['금액'], errors='coerce').fillna(0).astype(int)
@@ -93,20 +88,15 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # ✅ Streamlit의 컬럼 대신 강제 HTML 구조 사용
-            st.markdown(f"""
-                <div class="header-wrapper">
-                    <div class="month-text">{st.session_state.view_year}.{st.session_state.view_month}</div>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # 버튼은 Streamlit 기능을 쓰되, 한 줄에 가깝게 배치하기 위해 간격 조정
-            c1, c2 = st.columns(2)
+            # ✅ 가로 한 줄 강제 고정 (컬럼 폭 비율을 아주 작게 조절)
+            c1, c2, c3 = st.columns([0.4, 1.2, 0.4])
             with c1:
-                if st.button("◀ 저번달", key=f"prev_{user}", use_container_width=True): 
+                if st.button("◀", key=f"p_{user}", use_container_width=True):
                     change_month(-1); st.rerun()
             with c2:
-                if st.button("다음달 ▶", key=f"next_{user}", use_container_width=True): 
+                st.markdown(f"<div class='month-text-large'>{st.session_state.view_year}.{st.session_state.view_month}</div>", unsafe_allow_html=True)
+            with c3:
+                if st.button("▶", key=f"n_{user}", use_container_width=True):
                     change_month(1); st.rerun()
 
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
@@ -130,7 +120,7 @@ for i, tab in enumerate(user_tabs):
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 리스트 보기 (동일)
+            # 리스트 보기
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
