@@ -6,30 +6,30 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 절대 줄바꿈 금지 및 삼각형 버튼 스타일
+# ✅ CSS: 절대 줄바꿈 금지 및 중앙 정렬 (HTML 직접 제어)
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* 상단 네비게이션 테이블 구조 (강제 한 줄) */
-    .nav-table {
+    /* 상단 컨트롤러 강제 한 줄 고정 (가장 중요) */
+    .nav-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px; /* 버튼과 날짜 사이 간격 */
         width: 100%;
-        max-width: 320px; /* 7일 칸 전체 폭보다 약간 좁게 제한 */
-        margin: 0 auto 10px auto;
-        border-collapse: collapse;
+        margin: 10px 0;
     }
-    .nav-td-btn { width: 25%; text-align: center; }
-    .nav-td-date { width: 50%; text-align: center; vertical-align: middle; }
     
-    .month-header {
-        font-size: 1.3rem !important;
+    .month-text-final {
+        font-size: 1.4rem !important;
         font-weight: 800;
         color: #333;
-        margin: 0;
         white-space: nowrap;
+        text-align: center;
     }
 
-    /* 7열 달력 그리드 강제 고정 */
+    /* 7열 달력 그리드 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -43,17 +43,12 @@ st.markdown("""
         align-items: center; justify-content: flex-start; padding: 2px;
     }
     .cal-date { font-weight: bold; font-size: 0.8rem; }
-    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; line-height: 1; }
-    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; line-height: 1; }
+    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; }
+    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
     
-    /* Streamlit 버튼 스타일 강제 오버라이드 (삼각형 버튼용) */
-    .stButton > button {
-        padding: 0 !important;
-        height: 40px !important;
-        font-size: 1.2rem !important;
-        border-radius: 8px !important;
-    }
+    /* 리스트 카드 스타일 */
+    .list-card { background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid #007bff; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -94,18 +89,17 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # ✅ 날짜를 먼저 중앙에 배치
-            st.markdown(f"<div class='month-header'>{st.session_state.view_year}년 {st.session_state.view_month}월</div>", unsafe_allow_html=True)
-            
-            # ✅ 버튼을 날짜 바로 아래에 ◀ ▶ 기호만 써서 좁은 폭으로 배치
-            # 여백을 주어 7일 칸보다 좁게 보이도록 컬럼 구성
-            empty1, b1, b2, empty2 = st.columns([1, 1, 1, 1])
-            with b1:
+            # ✅ 가로 한 줄 강제 고정 컨트롤러 (st.columns 미사용)
+            # 빈 칸을 이용해 비율 조절
+            m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns([1, 1, 4, 1, 1])
+            with m_col2:
                 if st.button("◀", key=f"p_{user}"): change_month(-1); st.rerun()
-            with b2:
+            with m_col3:
+                st.markdown(f"<div class='month-text-final'>{st.session_state.view_year}년 {st.session_state.view_month}월</div>", unsafe_allow_html=True)
+            with m_col4:
                 if st.button("▶", key=f"n_{user}"): change_month(1); st.rerun()
 
-            # 3. 달력 그리드
+            # 달력 그리드
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             grid_html = '<div class="calendar-grid">'
             for d in ["월", "화", "수", "목", "금", "토", "일"]:
@@ -127,17 +121,15 @@ for i, tab in enumerate(user_tabs):
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 목록 보기 (생략 없이 유지)
+            # 목록 보기
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
-                    st.markdown(f"""
-                    <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid #007bff;">
+                    st.markdown(f"""<div class="list-card">
                         <div style="font-size:0.85rem;"><b>{row['날짜']}</b> | {row['구분']}</div>
                         <div style="font-size:1rem; font-weight:bold;">{row['금액']:,}원 ({row['카테고리']})</div>
                         <div style="font-size:0.8rem; color:#666;">{row['내역']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    </div>""", unsafe_allow_html=True)
                     if st.button("🗑️", key=f"del_{user}_{idx}"):
                         new_df = df.drop(row['index']); conn.update(worksheet=user, data=new_df); st.rerun()
             else: st.info("내역 없음")
