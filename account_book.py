@@ -6,40 +6,52 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 모바일 달력 깨짐 방지 및 최적화
+# ✅ CSS: 아이폰 화면 꽉 채우기 및 여백 박멸
 st.markdown("""
     <style>
-    /* 전체 여백 줄이기 */
-    .main .block-container { padding: 0.5rem; }
+    /* 1. 기본 Streamlit 컨테이너 여백 제거 (가장 중요) */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        max-width: 100% !important;
+    }
     
-    /* 달력 칸 최적화 (모바일 전용) */
+    /* 2. 컬럼 사이 간격 줄이기 */
+    [data-testid="column"] {
+        padding: 0px !important;
+        margin: 0px !important;
+        min-width: 0px !important;
+    }
+    div[data-testid="stHorizontalBlock"] {
+        gap: 2px !important;
+    }
+
+    /* 3. 달력 칸 디자인 (아이폰 최적화) */
     .cal-day { 
         border: 1px solid #eee; 
-        height: 75px; /* 높이 약간 축소 */
+        height: 70px; 
         padding: 2px; 
-        border-radius: 5px; 
+        border-radius: 4px; 
         background-color: #fdfdfd;
         display: flex;
         flex-direction: column;
-        justify-content: flex-start;
-        overflow: hidden;
+        align-items: center;
     }
-    .cal-date { font-weight: bold; font-size: 0.75rem; margin-bottom: 1px; }
-    .cal-exp { color: #ff4b4b; font-size: 0.65rem; font-weight: bold; line-height: 1; }
-    .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; line-height: 1; }
+    .cal-date { font-weight: bold; font-size: 0.8rem; margin-bottom: 2px; }
+    .cal-exp { color: #ff4b4b; font-size: 0.65rem; font-weight: bold; line-height: 1.1; }
+    .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; line-height: 1.1; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
     
-    /* 요일 헤더 폰트 축소 */
-    .day-header { font-size: 0.7rem; font-weight: bold; text-align: center; }
+    /* 4. 요일 헤더 아주 작게 */
+    .day-header { font-size: 0.65rem; font-weight: bold; text-align: center; color: #888; margin-bottom: 5px; }
 
-    /* 카드형 목록 디자인 */
+    /* 리스트 카드 레이아웃 */
     .record-card { background-color: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #007bff; }
     .record-row { margin-bottom: 2px; font-size: 0.85rem; }
     .record-label { color: #666; font-size: 0.75rem; margin-right: 5px; }
     .record-amount { font-weight: bold; color: #333; font-size: 1rem; }
-    
-    /* 버튼 크기 조정 */
-    .stButton>button { width: 100%; padding: 0.5rem; border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -48,7 +60,6 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data(sheet_name):
     cols = ["날짜", "구분", "카테고리", "내역", "금액"]
     try:
-        # 반응성 향상을 위해 ttl을 10으로 조정 (10초 캐시)
         df = conn.read(worksheet=sheet_name, ttl=10)
         if df is None or df.empty or '구분' not in df.columns:
             return pd.DataFrame(columns=cols)
@@ -61,7 +72,6 @@ def load_data(sheet_name):
 
 def format_man(amount):
     if amount == 0: return ""
-    # 모바일 공간 확보를 위해 '만' 생략하고 숫자만 표시하거나 소수점 제거 가능
     val = round(amount / 10000, 1)
     if val == int(val): val = int(val)
     return f"{val}만"
@@ -89,22 +99,22 @@ for i, tab in enumerate(tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            c1, c2, c3 = st.columns([1, 2, 1])
-            with c1: 
+            # 년/월 표시 및 이동 버튼
+            bc1, bc2, bc3 = st.columns([1, 2, 1])
+            with bc1: 
                 if st.button("◀", key=f"prev_{user}"): change_month(-1); st.rerun()
-            with c2: st.markdown(f"### <center>{st.session_state.view_year}.{st.session_state.view_month}</center>", unsafe_allow_html=True)
-            with c3: 
+            with bc2: st.markdown(f"<center><b>{st.session_state.view_year}.{st.session_state.view_month}</b></center>", unsafe_allow_html=True)
+            with bc3: 
                 if st.button("▶", key=f"next_{user}"): change_month(1); st.rerun()
 
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             
-            # 요일 헤더
+            # 요일 헤더 (초소형)
             h_cols = st.columns(7)
-            days = ["월", "화", "수", "목", "금", "토", "일"]
-            for idx, d_n in enumerate(days): 
+            for idx, d_n in enumerate(["월", "화", "수", "목", "금", "토", "일"]): 
                 h_cols[idx].markdown(f"<div class='day-header'>{d_n}</div>", unsafe_allow_html=True)
 
-            # 달력 날짜
+            # 달력 데이터
             for week in cal:
                 w_cols = st.columns(7)
                 for idx, day in enumerate(week):
@@ -118,7 +128,10 @@ for i, tab in enumerate(tabs):
                             itxt = f"<div class='cal-inc'>{format_man(inc)}</div>" if inc > 0 else ""
                             etxt = f"<div class='cal-exp'>{format_man(exp)}</div>" if exp > 0 else ""
                             st.markdown(f"<div class='cal-day {is_t}'><div class='cal-date'>{day}</div>{itxt}{etxt}</div>", unsafe_allow_html=True)
+                    else:
+                        with w_cols[idx]: st.markdown("<div style='height:70px;'></div>", unsafe_allow_html=True)
         else:
+            # 목록 보기 (동일)
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
@@ -131,7 +144,7 @@ for i, tab in enumerate(tabs):
                         <div class="record-row"><span class="record-label">상세</span>{row['내역']}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    if st.button("🗑️ 삭제", key=f"del_{user}_{idx}"):
+                    if st.button("🗑️", key=f"del_{user}_{idx}"):
                         new_df = df.drop(row['index'])
                         conn.update(worksheet=user, data=new_df)
                         st.rerun()
@@ -145,10 +158,9 @@ for i, tab in enumerate(tabs):
             m_c = st.selectbox("카테고리", c_list, key=f"cat_{user}")
             m_a = st.number_input("금액(원)", min_value=0, step=1000, key=f"amt_{user}")
             m_i = st.text_input("상세 내역", key=f"item_{user}")
-            
             if st.button("입력", key=f"save_{user}"):
-                final_item_name = m_i if m_i.strip() != "" else m_c
-                new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": final_item_name, "금액": m_a}])
+                final_item = m_i if m_i.strip() != "" else m_c
+                new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": final_item, "금액": m_a}])
                 targets = ["beom", "jyeon"] if m_t == "우리" else (["beom"] if m_t == "범지출" else (["jyeon"] if m_t == "젼지출" else [user]))
                 for t in targets:
                     current_df = load_data(t)
