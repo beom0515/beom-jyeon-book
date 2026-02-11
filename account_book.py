@@ -6,9 +6,18 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# CSS: 디자인 및 모바일 최적화
+# CSS: 디자인 및 +, - 버튼 제거 로직 추가
 st.markdown("""
     <style>
+    /* 금액 입력칸의 +, - 증감 버튼 숨기기 */
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { 
+        -webkit-appearance: none; 
+        margin: 0; 
+    }
+    input[type=number] { -moz-appearance: textfield; }
+
+    /* 기존 디자인 유지 */
     .cal-day { border: 1px solid #eee; height: 85px; padding: 3px; border-radius: 8px; background-color: #fdfdfd; }
     .cal-date { font-weight: bold; font-size: 0.9rem; margin-bottom: 2px; }
     .cal-exp { color: #ff4b4b; font-size: 0.75rem; font-weight: bold; }
@@ -25,21 +34,16 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data(sheet_name):
-    # 기본 틀 설정
     cols = ["날짜", "구분", "카테고리", "내역", "금액"]
     try:
         df = conn.read(worksheet=sheet_name, ttl=0)
-        # 데이터가 아예 없거나 컬럼이 안 보이면 기본 틀로 초기화
         if df is None or df.empty or '구분' not in df.columns:
             return pd.DataFrame(columns=cols)
-        
-        # 필요한 컬럼만 추출하고 데이터 정리
         df = df[cols].copy()
         df['날짜'] = pd.to_datetime(df['날짜']).dt.date
         df['금액'] = pd.to_numeric(df['금액'], errors='coerce').fillna(0).astype(int)
         return df
-    except Exception as e:
-        # 에러 발생 시에도 빈 틀 반환해서 튕기지 않게 함
+    except Exception:
         return pd.DataFrame(columns=cols)
 
 def format_man(amount):
@@ -49,7 +53,6 @@ def format_man(amount):
 def format_won(amount):
     return f"{amount:,}원"
 
-# 날짜 상태 관리
 if 'view_year' not in st.session_state: st.session_state.view_year = datetime.now().year
 if 'view_month' not in st.session_state: st.session_state.view_month = datetime.now().month
 
@@ -87,15 +90,9 @@ for i, tab in enumerate(tabs):
                 for idx, day in enumerate(week):
                     if day != 0:
                         curr = date(st.session_state.view_year, st.session_state.view_month, day)
-                        # 해당 날짜 데이터 필터링
                         d_df = df[df['날짜'] == curr] if not df.empty else pd.DataFrame()
-                        
-                        inc = 0
-                        exp = 0
-                        if not d_df.empty:
-                            inc = d_df[d_df['구분'] == '수입']['금액'].sum()
-                            exp = d_df[d_df['구분'] != '수입']['금액'].sum()
-                        
+                        inc = d_df[d_df['구분'] == '수입']['금액'].sum() if not d_df.empty else 0
+                        exp = d_df[d_df['구분'] != '수입']['금액'].sum() if not d_df.empty else 0
                         is_t = "today-marker" if curr == date.today() else ""
                         with w_cols[idx]:
                             itxt = f"<div class='cal-inc'>{format_man(inc)}</div>" if inc > 0 else ""
@@ -126,7 +123,8 @@ for i, tab in enumerate(tabs):
             m_t = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"type_{user}")
             c_list = ["용돈", "기타"] if m_t == "수입" else ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타"]
             m_c = st.selectbox("카테고리", c_list, key=f"cat_{user}")
-            m_a = st.number_input("금액(원)", min_value=0, step=1000, key=f"amt_{user}")
+            # step=None 또는 아주 작은 값을 주어도 버튼이 생길 수 있어 CSS로 확실히 지웠습니다.
+            m_a = st.number_input("금액(원)", min_value=0, key=f"amt_{user}")
             m_i = st.text_input("상세 내역", key=f"item_{user}")
             if st.button("입력", key=f"save_{user}"):
                 new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": m_i, "금액": m_a}])
