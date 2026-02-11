@@ -4,26 +4,25 @@ import pandas as pd
 from datetime import datetime, date
 import calendar
 
-st.set_page_config(page_title="가계부", layout="wide")
+st.set_page_config(page_title="📔", layout="wide")
 
-# --- CSS 스타일 (한글 최소화, 디자인 깔끔하게) ---
+# --- CSS (한글 최소화 및 깔끔한 디자인) ---
 st.markdown("""
     <style>
-    .cal-day { border: 1px solid #eee; height: 90px; padding: 5px; border-radius: 8px; background-color: #fdfdfd; }
+    .cal-day { border: 1px solid #eee; height: 95px; padding: 5px; border-radius: 8px; background-color: #fdfdfd; }
     .cal-date { font-weight: bold; font-size: 1rem; margin-bottom: 2px; }
     .cal-exp { color: #ff4b4b; font-size: 0.8rem; font-weight: bold; }
     .cal-inc { color: #1f77b4; font-size: 0.8rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 2px solid #ffcc00; }
-    [data-testid="stExpander"] p { font-size: 0px; } /* 한글 텍스트 숨기기 */
+    /* 불필요한 공백 제거 */
+    div[data-testid="stExpander"] p { font-size: 14px; color: #666; }
     </style>
     """, unsafe_allow_html=True)
 
-# 구글 시트 연결 (가장 확실한 연결 방식)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data(sheet_name):
     try:
-        # 시트 이름을 명시적으로 지정하여 읽기
         df = conn.read(worksheet=sheet_name, ttl=0)
         df['날짜'] = pd.to_datetime(df['날짜']).dt.date
         df['금액'] = pd.to_numeric(df['금액'], errors='coerce').fillna(0).astype(int)
@@ -37,97 +36,84 @@ if 'view_month' not in st.session_state: st.session_state.view_month = datetime.
 
 def change_month(delta):
     new_month = st.session_state.view_month + delta
-    if new_month > 12:
-        st.session_state.view_month = 1; st.session_state.view_year += 1
-    elif new_month < 1:
-        st.session_state.view_month = 12; st.session_state.view_year -= 1
-    else:
-        st.session_state.view_month = new_month
+    if new_month > 12: st.session_state.view_year += 1; st.session_state.view_month = 1
+    elif new_month < 1: st.session_state.view_year -= 1; st.session_state.view_month = 12
+    else: st.session_state.view_month = new_month
 
-# 메인 화면 구성
-st.title("📔") # 한글 삭제
+st.title("📔")
 
-tabs = st.tabs(["Bum", "Jyeon"]) # 영어로 변경
+tabs = st.tabs(["Bum", "Jyeon"])
 names = ["beom", "jyeon"]
 
 for i, tab in enumerate(tabs):
     user = names[i]
     with tab:
         df = load_data(user)
+        v_mode = st.radio("Mode", ["📅", "📋"], horizontal=True, key=f"m_{user}")
         
-        # 보기 방식 선택 (그림 위주)
-        view_mode = st.radio("Mode", ["📅", "📋"], horizontal=True, key=f"mode_{user}")
-        
-        if view_mode == "📅":
-            c_prev, c_title, c_next = st.columns([1, 3, 1])
-            with c_prev:
-                if st.button("◀", key=f"prev_{user}"): change_month(-1); st.rerun()
-            with c_title:
-                st.markdown(f"### <center>{st.session_state.view_year} / {st.session_state.view_month}</center>", unsafe_allow_html=True)
-            with c_next:
-                if st.button("▶", key=f"next_{user}"): change_month(1); st.rerun()
+        if v_mode == "📅":
+            # 달력 컨트롤러
+            c1, c2, c3 = st.columns([1, 3, 1])
+            with c1: 
+                if st.button("◀", key=f"p_{user}"): change_month(-1); st.rerun()
+            with c2: st.markdown(f"### <center>{st.session_state.view_year} / {st.session_state.view_month}</center>", unsafe_allow_html=True)
+            with c3: 
+                if st.button("▶", key=f"n_{user}"): change_month(1); st.rerun()
 
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
-            cols = st.columns(7)
-            for idx, d_name in enumerate(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]): 
-                cols[idx].markdown(f"<center>{d_name}</center>", unsafe_allow_html=True)
+            days_header = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            h_cols = st.columns(7)
+            for idx, d_name in enumerate(days_header): h_cols[idx].markdown(f"<center>{d_name}</center>", unsafe_allow_html=True)
 
             for week in cal:
-                cols = st.columns(7)
+                w_cols = st.columns(7)
                 for idx, day in enumerate(week):
-                    if day == 0:
-                        cols[idx].write("")
-                    else:
-                        curr_date = date(st.session_state.view_year, st.session_state.view_month, day)
-                        day_data = df[df['날짜'] == curr_date]
-                        income = day_data[day_data['구분'] == '수입']['금액'].sum()
-                        expense = day_data[day_data['구분'] != '수입']['금액'].sum()
-                        is_today = "today-marker" if curr_date == datetime.now().date() else ""
-                        
-                        with cols[idx]:
-                            inc_txt = f"<div class='cal-inc'>+{int(income/10000)}m</div>" if income >= 10000 else ""
-                            exp_txt = f"<div class='cal-exp'>-{int(expense/10000)}m</div>" if expense >= 10000 else ""
-                            st.markdown(f"<div class='cal-day {is_today}'><div class='cal-date'>{day}</div>{inc_txt}{exp_txt}</div>", unsafe_allow_html=True)
+                    if day != 0:
+                        curr = date(st.session_state.view_year, st.session_state.view_month, day)
+                        d_df = df[df['날짜'] == curr]
+                        inc = d_df[d_df['구분'] == '수입']['금액'].sum()
+                        exp = d_df[d_df['구분'] != '수입']['금액'].sum()
+                        is_t = "today-marker" if curr == date.today() else ""
+                        with w_cols[idx]:
+                            itxt = f"<div class='cal-inc'>+{int(inc/10000)}m</div>" if inc >= 10000 else ""
+                            etxt = f"<div class='cal-exp'>-{int(exp/10000)}m</div>" if exp >= 10000 else ""
+                            st.markdown(f"<div class='cal-day {is_t}'><div class='cal-date'>{day}</div>{itxt}{etxt}</div>", unsafe_allow_html=True)
         else:
-            st.dataframe(df.sort_values(by='날짜', ascending=False), use_container_width=True, hide_index=True)
+            # 표로 보기 (최신순 정렬)
+            st.dataframe(df.sort_values('날짜', ascending=False), use_container_width=True, hide_index=True)
 
         st.write("---")
-        # + 옆의 한글 삭제
+        # 입력 섹션
         with st.expander("+", expanded=True):
-            with st.form(key=f"form_{user}", clear_on_submit=True):
-                sel_date = st.date_input("Date", value=datetime.now(), key=f"sel_{user}")
+            sel_d = st.date_input("Date", value=date.today(), key=f"sd_{user}")
+            
+            # 구분: 수입, 우리, 범지출, 젼지출
+            m_t = st.selectbox("Type", ["범지출", "젼지출", "우리", "수입"], key=f"mt_{user}")
+            
+            # [실시간 반영] 수입 선택 시 카테고리 변경
+            if m_t == "수입":
+                c_list = ["용돈", "기타"]
+            else:
+                c_list = ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타"]
+            
+            m_c = st.selectbox("Category", c_list, key=f"mc_{user}")
+            m_i = st.text_input("Item", key=f"mi_{user}")
+            m_a = st.number_input("Amount", min_value=0, step=1000, key=f"ma_{user}")
+            
+            if st.button("입력", key=f"btn_{user}"):
+                new = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": m_i, "금액": m_a}])
                 
-                # 구분: 수입, 우리, 범지출, 젼지출
-                m_type = st.selectbox("Type", ["범지출", "젼지출", "우리", "수입"], key=f"t_{user}")
+                # 시트 반영 로직 (범지출/젼지출/우리 분류)
+                if m_t == "우리": tgs = ["beom", "jyeon"]
+                elif m_t == "범지출": tgs = ["beom"]
+                elif m_t == "젼지출": tgs = ["jyeon"]
+                else: tgs = [user] # 수입은 현재 탭의 주인에게
                 
-                # 카테고리 로직 반영
-                if m_type == "수입":
-                    cats = ["용돈", "기타"]
-                else:
-                    cats = ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타"]
+                for t in tgs:
+                    # 데이터 쓰기 시 시트 이름을 강제로 재지정하여 안전하게 업데이트
+                    current_sheet_df = conn.read(worksheet=t, ttl=0)
+                    up_df = pd.concat([current_sheet_df, new], ignore_index=True)
+                    conn.update(worksheet=t, data=up_df)
                 
-                m_cat = st.selectbox("Category", cats, key=f"c_{user}")
-                m_item = st.text_input("Item", key=f"i_{user}")
-                m_amount = st.number_input("Amount", min_value=0, step=1000, key=f"a_{user}")
-                
-                # '입력'으로 버튼 이름 변경
-                if st.form_submit_button("입력"):
-                    new_row = pd.DataFrame([{"날짜": sel_date.strftime("%Y-%m-%d"), "구분": m_type, "카테고리": m_cat, "내역": m_item, "금액": m_amount}])
-                    
-                    # 저장 로직 (중요!)
-                    if m_type == "우리":
-                        targets = ["beom", "jyeon"]
-                    elif m_type == "범지출":
-                        targets = ["beom"]
-                    elif m_type == "젼지출":
-                        targets = ["jyeon"]
-                    else: # 수입 (현재 탭 주인이 가져감)
-                        targets = [user]
-                    
-                    for t in targets:
-                        # 매번 최신 데이터를 읽어와서 합침 (연결 끊김 방지)
-                        current_df = conn.read(worksheet=t, ttl=0)
-                        updated_df = pd.concat([current_df, new_row], ignore_index=True)
-                        conn.update(worksheet=t, data=updated_df)
-                    
-                    st.rerun()
+                st.success("OK")
+                st.rerun()
