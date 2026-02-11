@@ -6,32 +6,21 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 컨트롤러 및 달력 완전 박멸 (한 줄 고정)
+# ✅ CSS: 날짜 중앙 정렬 및 버튼 2분할 고정
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* ◀ 2026.2 ▶ 강제 한 줄 고정 레이아웃 */
-    .nav-container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        width: 100%;
-        margin-bottom: 10px;
-        gap: 0;
-    }
-    .nav-box {
-        flex: 1;
+    /* 날짜 제목 중앙 정렬 */
+    .month-header {
         text-align: center;
-    }
-    .month-text-large {
-        font-size: 1.5rem !important;
+        font-size: 1.6rem !important;
         font-weight: 800;
+        margin-bottom: 5px;
         color: #333;
-        white-space: nowrap;
     }
-    
-    /* 달력 그리드 고정 */
+
+    /* 7열 달력 그리드 강제 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -45,9 +34,16 @@ st.markdown("""
         align-items: center; justify-content: flex-start; padding: 2px;
     }
     .cal-date { font-weight: bold; font-size: 0.8rem; }
-    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; }
-    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; }
+    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; line-height: 1; }
+    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; line-height: 1; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
+    
+    /* 버튼 2분할 스타일 조정 */
+    div[data-testid="stHorizontalBlock"] button {
+        height: 45px !important;
+        font-size: 1.2rem !important;
+        font-weight: bold !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -88,17 +84,19 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # ✅ 가로 한 줄 강제 고정 (컬럼 폭 비율을 아주 작게 조절)
-            c1, c2, c3 = st.columns([0.4, 1.2, 0.4])
-            with c1:
-                if st.button("◀", key=f"p_{user}", use_container_width=True):
+            # 1. 날짜 표시 (중앙)
+            st.markdown(f"<div class='month-header'>{st.session_state.view_year}년 {st.session_state.view_month}월</div>", unsafe_allow_html=True)
+            
+            # 2. 버튼 2분할 ( < / > )
+            btn_c1, btn_c2 = st.columns(2)
+            with btn_c1:
+                if st.button("<", key=f"p_{user}", use_container_width=True):
                     change_month(-1); st.rerun()
-            with c2:
-                st.markdown(f"<div class='month-text-large'>{st.session_state.view_year}.{st.session_state.view_month}</div>", unsafe_allow_html=True)
-            with c3:
-                if st.button("▶", key=f"n_{user}", use_container_width=True):
+            with btn_c2:
+                if st.button(">", key=f"n_{user}", use_container_width=True):
                     change_month(1); st.rerun()
 
+            # 3. 달력 그리드
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             grid_html = '<div class="calendar-grid">'
             for d in ["월", "화", "수", "목", "금", "토", "일"]:
@@ -120,7 +118,7 @@ for i, tab in enumerate(user_tabs):
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 리스트 보기
+            # 목록 보기 (생략)
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
@@ -136,6 +134,7 @@ for i, tab in enumerate(user_tabs):
             else: st.info("내역 없음")
 
         st.write("---")
+        # 입력 섹션 (기존과 동일)
         with st.expander("+", expanded=True):
             sel_d = st.date_input("날짜", value=date.today(), key=f"date_{user}")
             m_t = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"type_{user}")
