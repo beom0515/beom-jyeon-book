@@ -6,56 +6,60 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 컨트롤러 강제 한 줄 고정 및 폰트 크기 조정
+# ✅ CSS: 모바일 화면 꽉 채우기 및 컨트롤러 한 줄 고정
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* 상단 컨트롤러: 절대 위아래로 안 깨지게 Flex 설정 */
-    .custom-ctrl {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-        margin-bottom: 15px;
-        gap: 5px;
-    }
+    /* 상단 컨트롤러: 폰트 키우고 한 줄 고정 */
     .month-display {
-        font-size: 1.4rem !important; /* 폰트 크기 키움 */
+        font-size: 1.4rem !important;
         font-weight: 800;
-        flex-grow: 1;
         text-align: center;
-        white-space: nowrap; /* 줄바꿈 절대 방지 */
-    }
-    .nav-btn {
-        width: 45px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: #f0f2f6;
-        border-radius: 8px;
-        border: 1px solid #ddd;
-        cursor: pointer;
+        width: 100%;
     }
 
-    /* 달력 그리드 고정 */
+    /* 7열 달력 그리드 강제 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         gap: 2px;
         width: 100%;
     }
-    .day-header { font-size: 0.7rem; font-weight: bold; text-align: center; color: #888; padding-bottom: 5px; }
-    .cal-day { 
-        border: 1px solid #eee; height: 60px; border-radius: 4px; 
-        background-color: #fdfdfd; display: flex; flex-direction: column; 
-        align-items: center; justify-content: flex-start; padding: 2px;
+    
+    .day-header {
+        font-size: 0.7rem;
+        font-weight: bold;
+        text-align: center;
+        padding-bottom: 5px;
+        color: #888;
     }
+
+    .cal-day { 
+        border: 1px solid #eee; 
+        height: 60px; 
+        border-radius: 4px; 
+        background-color: #fdfdfd;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 2px;
+    }
+    
     .cal-date { font-weight: bold; font-size: 0.8rem; }
-    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; }
-    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; }
+    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; line-height: 1; }
+    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; line-height: 1; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
+
+    /* 리스트 카드 레이아웃 */
+    .record-card { background-color: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #007bff; }
+    .record-row { margin-bottom: 2px; font-size: 0.85rem; }
+    .record-label { color: #666; font-size: 0.75rem; margin-right: 5px; }
+    .record-amount { font-weight: bold; color: #333; font-size: 1rem; }
+    
+    /* 버튼 높이 조정 */
+    .stButton>button { height: 38px; border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -65,12 +69,14 @@ def load_data(sheet_name):
     cols = ["날짜", "구분", "카테고리", "내역", "금액"]
     try:
         df = conn.read(worksheet=sheet_name, ttl=10)
-        if df is None or df.empty or '구분' not in df.columns: return pd.DataFrame(columns=cols)
+        if df is None or df.empty or '구분' not in df.columns:
+            return pd.DataFrame(columns=cols)
         df = df[cols].copy()
         df['날짜'] = pd.to_datetime(df['날짜']).dt.date
         df['금액'] = pd.to_numeric(df['금액'], errors='coerce').fillna(0).astype(int)
         return df
-    except Exception: return pd.DataFrame(columns=cols)
+    except Exception:
+        return pd.DataFrame(columns=cols)
 
 def format_man(amount):
     if amount == 0: return ""
@@ -97,20 +103,22 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # ✅ 가로 한 줄 강제 고정 컨트롤러
-            ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([0.5, 2, 0.5])
-            with ctrl_col1:
+            # 상단 버튼 및 날짜 표시 (비율 조정)
+            c1, c2, c3 = st.columns([0.6, 2, 0.6])
+            with c1:
                 if st.button("◀", key=f"prev_{user}"): change_month(-1); st.rerun()
-            with ctrl_col2:
-                # 폰트 크기 대폭 키움
+            with c2:
                 st.markdown(f"<div class='month-display'>{st.session_state.view_year}.{st.session_state.view_month}</div>", unsafe_allow_html=True)
-            with ctrl_col3:
+            with c3:
                 if st.button("▶", key=f"next_{user}"): change_month(1); st.rerun()
 
-            # 달력 그리드 출력
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
+            
+            # HTML 그리드 생성
             grid_html = '<div class="calendar-grid">'
-            for d in ["월", "화", "수", "목", "금", "토", "일"]: grid_html += f'<div class="day-header">{d}</div>'
+            for d in ["월", "화", "수", "목", "금", "토", "일"]:
+                grid_html += f'<div class="day-header">{d}</div>'
+            
             for week in cal:
                 for day in week:
                     if day != 0:
@@ -119,16 +127,17 @@ for i, tab in enumerate(user_tabs):
                         inc = d_df[d_df['구분'] == '수입']['금액'].sum() if not d_df.empty else 0
                         exp = d_df[d_df['구분'] != '수입']['금액'].sum() if not d_df.empty else 0
                         is_t = "today-marker" if curr == date.today() else ""
-                        grid_html += f'<div class="cal-day {is_t}"><div class="cal-date">{day}</div>'
-                        grid_html += f'<div class='cal-inc'>{format_man(inc)}</div>' if inc > 0 else ""
-                        grid_html += f'<div class='cal-exp'>{format_man(exp)}</div>' if exp > 0 else ""
-                        grid_html += '</div>'
-                    else: grid_html += '<div class="cal-day" style="border:none; background:none;"></div>'
+                        
+                        # ✅ SyntaxError 수정됨: 바깥쪽은 f"" 안쪽은 '' 사용
+                        itxt = f"<div class='cal-inc'>{format_man(inc)}</div>" if inc > 0 else ""
+                        etxt = f"<div class='cal-exp'>{format_man(exp)}</div>" if exp > 0 else ""
+                        grid_html += f'<div class="cal-day {is_t}"><div class="cal-date">{day}</div>{itxt}{etxt}</div>'
+                    else:
+                        grid_html += '<div class="cal-day" style="border:none; background:none;"></div>'
             grid_html += '</div>'
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 리스트 보기 (기존 유지)
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
@@ -142,7 +151,9 @@ for i, tab in enumerate(user_tabs):
                     </div>
                     """, unsafe_allow_html=True)
                     if st.button("🗑️", key=f"del_{user}_{idx}"):
-                        new_df = df.drop(row['index']); conn.update(worksheet=user, data=new_df); st.rerun()
+                        new_df = df.drop(row['index'])
+                        conn.update(worksheet=user, data=new_df)
+                        st.rerun()
             else: st.info("내역 없음")
 
         st.write("---")
@@ -158,5 +169,7 @@ for i, tab in enumerate(user_tabs):
                 new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": final_item, "금액": m_a}])
                 targets = ["beom", "jyeon"] if m_t == "우리" else (["beom"] if m_t == "범지출" else (["jyeon"] if m_t == "젼지출" else [user]))
                 for t in targets:
-                    curr_df = load_data(t); upd_df = pd.concat([curr_df, new_row], ignore_index=True); conn.update(worksheet=t, data=upd_df)
+                    curr_df = load_data(t)
+                    upd_df = pd.concat([curr_df, new_row], ignore_index=True)
+                    conn.update(worksheet=t, data=upd_df)
                 st.rerun()
