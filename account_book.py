@@ -6,7 +6,7 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 중앙 정렬 및 폰트 크기/굵기 강화
+# ✅ CSS: 연/월 폰트 극대화 및 중앙 집중 레이아웃
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
@@ -28,25 +28,19 @@ st.markdown("""
     .val-inc { color: #1f77b4; }
     .val-exp { color: #ff4b4b; }
 
-    /* ✅ 중앙 정렬 연/월 선택창 스타일 */
-    div[data-testid="stHorizontalBlock"] {
-        justify-content: center !important;
-        align-items: center !important;
-        gap: 0px !important;
+    /* ✅ 연/월 선택창 디자인 (한 줄씩 큼직하게) */
+    div[data-testid="stSelectbox"] {
+        max-width: 250px !important;
+        margin: 0 auto !important; /* 중앙 정렬 */
+        padding-bottom: 5px !important;
     }
     
-    /* 셀렉트박스 내부 숫자 굵게 및 크기 조절 */
     div[data-testid="stSelectbox"] div[data-baseweb="select"] {
-        font-size: 1.4rem !important;
-        font-weight: 900 !important; /* 아주 굵게 */
+        font-size: 1.8rem !important;
+        font-weight: 900 !important;
+        text-align: center !important;
         border: none !important;
         background-color: transparent !important;
-    }
-    
-    /* '년', '월' 텍스트 강제 삽입 느낌을 위한 여백 제거 */
-    div[data-testid="stSelectbox"] {
-        width: 110px !important; /* 폭 최적화 */
-        margin: 0 auto !important;
     }
 
     /* 달력 본체 */
@@ -68,7 +62,6 @@ st.markdown("""
     .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
 
-    /* 라벨 숨기기 */
     div[data-testid="stSelectbox"] label { display: none; }
     .record-card { background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid #007bff; }
     </style>
@@ -105,7 +98,6 @@ for i, tab in enumerate(user_tabs):
         df = load_data(user)
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
-        # 월간 요약 계산
         if not df.empty:
             df_view = df[(df['날짜'].apply(lambda x: x.year) == st.session_state.view_year) & 
                         (df['날짜'].apply(lambda x: x.month) == st.session_state.view_month)]
@@ -116,7 +108,7 @@ for i, tab in enumerate(user_tabs):
             total_inc, total_exp, balance = 0, 0, 0
 
         if v_mode == "📅":
-            # 1. 잔액 요약란
+            # 1. 잔액 요약
             st.markdown(f"""
                 <div class="summary-box">
                     <div class="summary-item"><span class="summary-label">수입</span><span class="summary-value val-inc">+{total_inc:,}</span></div>
@@ -125,21 +117,18 @@ for i, tab in enumerate(user_tabs):
                 </div>
             """, unsafe_allow_html=True)
 
-            # ✅ 2. 중앙 정렬 연/월 선택 (숫자 크게, 년/월 붙여서)
-            # 빈 컬럼으로 양 옆을 밀어서 중앙 정렬 효과
-            c1, c2, c3, c4 = st.columns([1, 1.2, 1, 1])
-            with c2:
-                year_opt = [f"{y}년" for y in range(2024, 2031)]
-                curr_y_str = f"{st.session_state.view_year}년"
-                sel_y = st.selectbox("Y", year_opt, index=year_opt.index(curr_y_str), key=f"sel_y_{user}")
-                st.session_state.view_year = int(sel_y.replace("년", ""))
-            with c3:
-                month_opt = [f"{m}월" for m in range(1, 13)]
-                curr_m_str = f"{st.session_state.view_month}월"
-                sel_m = st.selectbox("M", month_opt, index=month_opt.index(curr_m_str), key=f"sel_m_{user}")
-                st.session_state.view_month = int(sel_m.replace("월", ""))
+            # ✅ 2. 웅장한 연/월 한 줄씩 배치
+            # 연도 선택
+            year_opt = [f"{y}년" for y in range(2024, 2031)]
+            sel_y = st.selectbox("Y", year_opt, index=year_opt.index(f"{st.session_state.view_year}년"), key=f"sel_y_{user}")
+            st.session_state.view_year = int(sel_y.replace("년", ""))
+            
+            # 월 선택
+            month_opt = [f"{m}월" for m in range(1, 13)]
+            sel_m = st.selectbox("M", month_opt, index=month_opt.index(f"{st.session_state.view_month}월"), key=f"sel_m_{user}")
+            st.session_state.view_month = int(sel_m.replace("월", ""))
 
-            # 3. 달력 본체
+            # 3. 달력
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             grid_html = '<div class="calendar-grid">'
             for d in ["월", "화", "수", "목", "금", "토", "일"]:
@@ -161,7 +150,7 @@ for i, tab in enumerate(user_tabs):
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 리스트 보기
+            # 목록 보기
             if not df_view.empty:
                 display_df = df_view.sort_values('날짜', ascending=False)
                 for idx, row in display_df.iterrows():
@@ -174,8 +163,7 @@ for i, tab in enumerate(user_tabs):
                         full_df = load_data(user)
                         drop_idx = full_df[(full_df['날짜']==row['날짜']) & (full_df['금액']==row['금액']) & (full_df['내역']==row['내역'])].index
                         if not drop_idx.empty:
-                            new_df = full_df.drop(drop_idx[0])
-                            conn.update(worksheet=user, data=new_df); st.rerun()
+                            new_df = full_df.drop(drop_idx[0]); conn.update(worksheet=user, data=new_df); st.rerun()
             else: st.info("내역 없음")
 
         st.write("---")
@@ -186,7 +174,6 @@ for i, tab in enumerate(user_tabs):
             m_c = st.selectbox("카테고리", c_list, key=f"cat_{user}")
             m_a = st.number_input("금액(원)", min_value=0, step=1000, key=f"amt_{user}")
             m_i = st.text_input("상세내역", key=f"info_{user}")
-            
             if st.button("저장", key=f"save_{user}", use_container_width=True):
                 final_info = m_i if m_i.strip() != "" else m_c
                 if m_t == "우리":
@@ -196,7 +183,6 @@ for i, tab in enumerate(user_tabs):
                 else:
                     new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": final_info, "금액": m_a}])
                     targets = [user]
-
                 for t in targets:
                     curr_df = load_data(t); upd_df = pd.concat([curr_df, new_row], ignore_index=True); conn.update(worksheet=t, data=upd_df)
                 st.rerun()
