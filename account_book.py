@@ -6,46 +6,44 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 아이폰 화면 꽉 채우기 및 여백 박멸
+# ✅ CSS: 모바일에서 무조건 한 줄에 7칸 나오게 강제 고정
 st.markdown("""
     <style>
-    /* 1. 기본 Streamlit 컨테이너 여백 제거 (가장 중요) */
-    .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        max-width: 100% !important;
+    .block-container { padding: 0.5rem !important; max-width: 100% !important; }
+    
+    /* 7열 그리드 시스템 */
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+        width: 100%;
     }
     
-    /* 2. 컬럼 사이 간격 줄이기 */
-    [data-testid="column"] {
-        padding: 0px !important;
-        margin: 0px !important;
-        min-width: 0px !important;
-    }
-    div[data-testid="stHorizontalBlock"] {
-        gap: 2px !important;
+    .day-header {
+        font-size: 0.7rem;
+        font-weight: bold;
+        text-align: center;
+        padding: 5px 0;
+        color: #888;
     }
 
-    /* 3. 달력 칸 디자인 (아이폰 최적화) */
     .cal-day { 
         border: 1px solid #eee; 
-        height: 70px; 
-        padding: 2px; 
+        height: 65px; 
         border-radius: 4px; 
         background-color: #fdfdfd;
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: flex-start;
+        padding: 2px;
     }
-    .cal-date { font-weight: bold; font-size: 0.8rem; margin-bottom: 2px; }
-    .cal-exp { color: #ff4b4b; font-size: 0.65rem; font-weight: bold; line-height: 1.1; }
-    .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; line-height: 1.1; }
-    .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
     
-    /* 4. 요일 헤더 아주 작게 */
-    .day-header { font-size: 0.65rem; font-weight: bold; text-align: center; color: #888; margin-bottom: 5px; }
+    .cal-date { font-weight: bold; font-size: 0.75rem; }
+    .cal-exp { color: #ff4b4b; font-size: 0.6rem; font-weight: bold; line-height: 1; }
+    .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; line-height: 1; }
+    .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
+    .empty-day { background-color: transparent; border: none; }
 
     /* 리스트 카드 레이아웃 */
     .record-card { background-color: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #007bff; }
@@ -73,8 +71,7 @@ def load_data(sheet_name):
 def format_man(amount):
     if amount == 0: return ""
     val = round(amount / 10000, 1)
-    if val == int(val): val = int(val)
-    return f"{val}만"
+    return f"{int(val) if val == int(val) else val}만"
 
 def format_won(amount):
     return f"{amount:,}원"
@@ -89,49 +86,50 @@ def change_month(delta):
     else: st.session_state.view_month = new_month
 
 st.title("📔 범 & 젼")
+user_tabs = st.tabs(["범", "젼"])
 names = ["beom", "jyeon"]
-tabs = st.tabs(["범", "젼"])
 
-for i, tab in enumerate(tabs):
+for i, tab in enumerate(user_tabs):
     user = names[i]
     with tab:
         df = load_data(user)
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # 년/월 표시 및 이동 버튼
-            bc1, bc2, bc3 = st.columns([1, 2, 1])
-            with bc1: 
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c1: 
                 if st.button("◀", key=f"prev_{user}"): change_month(-1); st.rerun()
-            with bc2: st.markdown(f"<center><b>{st.session_state.view_year}.{st.session_state.view_month}</b></center>", unsafe_allow_html=True)
-            with bc3: 
+            with c2: st.markdown(f"<center><b>{st.session_state.view_year}.{st.session_state.view_month}</b></center>", unsafe_allow_html=True)
+            with c3: 
                 if st.button("▶", key=f"next_{user}"): change_month(1); st.rerun()
 
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             
-            # 요일 헤더 (초소형)
-            h_cols = st.columns(7)
-            for idx, d_n in enumerate(["월", "화", "수", "목", "금", "토", "일"]): 
-                h_cols[idx].markdown(f"<div class='day-header'>{d_n}</div>", unsafe_allow_html=True)
-
-            # 달력 데이터
+            # HTML 그리드 시작
+            grid_html = '<div class="calendar-grid">'
+            # 요일 헤더 추가
+            for d in ["월", "화", "수", "목", "금", "토", "일"]:
+                grid_html += f'<div class="day-header">{d}</div>'
+            
+            # 날짜 칸 추가
             for week in cal:
-                w_cols = st.columns(7)
-                for idx, day in enumerate(week):
+                for day in week:
                     if day != 0:
                         curr = date(st.session_state.view_year, st.session_state.view_month, day)
                         d_df = df[df['날짜'] == curr] if not df.empty else pd.DataFrame()
                         inc = d_df[d_df['구분'] == '수입']['금액'].sum() if not d_df.empty else 0
                         exp = d_df[d_df['구분'] != '수입']['금액'].sum() if not d_df.empty else 0
                         is_t = "today-marker" if curr == date.today() else ""
-                        with w_cols[idx]:
-                            itxt = f"<div class='cal-inc'>{format_man(inc)}</div>" if inc > 0 else ""
-                            etxt = f"<div class='cal-exp'>{format_man(exp)}</div>" if exp > 0 else ""
-                            st.markdown(f"<div class='cal-day {is_t}'><div class='cal-date'>{day}</div>{itxt}{etxt}</div>", unsafe_allow_html=True)
+                        
+                        itxt = f"<div class='cal-inc'>{format_man(inc)}</div>" if inc > 0 else ""
+                        etxt = f"<div class='cal-exp'>{format_man(exp)}</div>" if exp > 0 else ""
+                        grid_html += f'<div class="cal-day {is_t}"><div class="cal-date">{day}</div>{itxt}{etxt}</div>'
                     else:
-                        with w_cols[idx]: st.markdown("<div style='height:70px;'></div>", unsafe_allow_html=True)
+                        grid_html += '<div class="cal-day empty-day"></div>'
+            grid_html += '</div>'
+            st.markdown(grid_html, unsafe_allow_html=True)
+            
         else:
-            # 목록 보기 (동일)
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
@@ -163,7 +161,7 @@ for i, tab in enumerate(tabs):
                 new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": final_item, "금액": m_a}])
                 targets = ["beom", "jyeon"] if m_t == "우리" else (["beom"] if m_t == "범지출" else (["jyeon"] if m_t == "젼지출" else [user]))
                 for t in targets:
-                    current_df = load_data(t)
-                    updated_df = pd.concat([current_df, new_row], ignore_index=True)
-                    conn.update(worksheet=t, data=updated_df)
+                    curr_df = load_data(t)
+                    upd_df = pd.concat([curr_df, new_row], ignore_index=True)
+                    conn.update(worksheet=t, data=upd_df)
                 st.rerun()
