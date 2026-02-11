@@ -6,19 +6,40 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# CSS: 디자인 유지
+# ✅ CSS: 모바일 달력 깨짐 방지 및 최적화
 st.markdown("""
     <style>
-    .cal-day { border: 1px solid #eee; height: 85px; padding: 3px; border-radius: 8px; background-color: #fdfdfd; }
-    .cal-date { font-weight: bold; font-size: 0.9rem; margin-bottom: 2px; }
-    .cal-exp { color: #ff4b4b; font-size: 0.75rem; font-weight: bold; }
-    .cal-inc { color: #1f77b4; font-size: 0.75rem; font-weight: bold; }
-    .today-marker { background-color: #fff9e6; border: 2px solid #ffcc00; }
-    .record-card { background-color: #f8f9fa; padding: 12px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #007bff; }
-    .record-row { margin-bottom: 4px; font-size: 0.95rem; }
-    .record-label { color: #666; font-size: 0.8rem; margin-right: 8px; }
-    .record-amount { font-weight: bold; color: #333; font-size: 1.1rem; }
-    .stButton>button { width: 100%; border-radius: 8px; }
+    /* 전체 여백 줄이기 */
+    .main .block-container { padding: 0.5rem; }
+    
+    /* 달력 칸 최적화 (모바일 전용) */
+    .cal-day { 
+        border: 1px solid #eee; 
+        height: 75px; /* 높이 약간 축소 */
+        padding: 2px; 
+        border-radius: 5px; 
+        background-color: #fdfdfd;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        overflow: hidden;
+    }
+    .cal-date { font-weight: bold; font-size: 0.75rem; margin-bottom: 1px; }
+    .cal-exp { color: #ff4b4b; font-size: 0.65rem; font-weight: bold; line-height: 1; }
+    .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; line-height: 1; }
+    .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
+    
+    /* 요일 헤더 폰트 축소 */
+    .day-header { font-size: 0.7rem; font-weight: bold; text-align: center; }
+
+    /* 카드형 목록 디자인 */
+    .record-card { background-color: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #007bff; }
+    .record-row { margin-bottom: 2px; font-size: 0.85rem; }
+    .record-label { color: #666; font-size: 0.75rem; margin-right: 5px; }
+    .record-amount { font-weight: bold; color: #333; font-size: 1rem; }
+    
+    /* 버튼 크기 조정 */
+    .stButton>button { width: 100%; padding: 0.5rem; border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -27,7 +48,8 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data(sheet_name):
     cols = ["날짜", "구분", "카테고리", "내역", "금액"]
     try:
-        df = conn.read(worksheet=sheet_name, ttl=0)
+        # 반응성 향상을 위해 ttl을 10으로 조정 (10초 캐시)
+        df = conn.read(worksheet=sheet_name, ttl=10)
         if df is None or df.empty or '구분' not in df.columns:
             return pd.DataFrame(columns=cols)
         df = df[cols].copy()
@@ -38,8 +60,11 @@ def load_data(sheet_name):
         return pd.DataFrame(columns=cols)
 
 def format_man(amount):
-    if amount == 0: return "0"
-    return f"{round(amount / 10000, 1)}만"
+    if amount == 0: return ""
+    # 모바일 공간 확보를 위해 '만' 생략하고 숫자만 표시하거나 소수점 제거 가능
+    val = round(amount / 10000, 1)
+    if val == int(val): val = int(val)
+    return f"{val}만"
 
 def format_won(amount):
     return f"{amount:,}원"
@@ -67,15 +92,19 @@ for i, tab in enumerate(tabs):
             c1, c2, c3 = st.columns([1, 2, 1])
             with c1: 
                 if st.button("◀", key=f"prev_{user}"): change_month(-1); st.rerun()
-            with c2: st.markdown(f"### <center>{st.session_state.view_year}. {st.session_state.view_month}</center>", unsafe_allow_html=True)
+            with c2: st.markdown(f"### <center>{st.session_state.view_year}.{st.session_state.view_month}</center>", unsafe_allow_html=True)
             with c3: 
                 if st.button("▶", key=f"next_{user}"): change_month(1); st.rerun()
 
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
+            
+            # 요일 헤더
             h_cols = st.columns(7)
-            for idx, d_n in enumerate(["월", "화", "수", "목", "금", "토", "일"]): 
-                h_cols[idx].markdown(f"<center><small>{d_n}</small></center>", unsafe_allow_html=True)
+            days = ["월", "화", "수", "목", "금", "토", "일"]
+            for idx, d_n in enumerate(days): 
+                h_cols[idx].markdown(f"<div class='day-header'>{d_n}</div>", unsafe_allow_html=True)
 
+            # 달력 날짜
             for week in cal:
                 w_cols = st.columns(7)
                 for idx, day in enumerate(week):
@@ -118,17 +147,8 @@ for i, tab in enumerate(tabs):
             m_i = st.text_input("상세 내역", key=f"item_{user}")
             
             if st.button("입력", key=f"save_{user}"):
-                # ✅ 상세 내역이 비어있으면 카테고리 이름을 사용
                 final_item_name = m_i if m_i.strip() != "" else m_c
-                
-                new_row = pd.DataFrame([{
-                    "날짜": sel_d.strftime("%Y-%m-%d"), 
-                    "구분": m_t, 
-                    "카테고리": m_c, 
-                    "내역": final_item_name, 
-                    "금액": m_a
-                }])
-                
+                new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": final_item_name, "금액": m_a}])
                 targets = ["beom", "jyeon"] if m_t == "우리" else (["beom"] if m_t == "범지출" else (["jyeon"] if m_t == "젼지출" else [user]))
                 for t in targets:
                     current_df = load_data(t)
