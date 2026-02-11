@@ -21,10 +21,14 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data(sheet_name):
     try:
-        # ttl=0으로 실시간 데이터 강제 로드
         df = conn.read(worksheet=sheet_name, ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=["날짜", "구분", "카테고리", "내역", "금액"])
+        
+        # [핵심] 만약 헤더 이름이 인식 안 되면 열 순서로 강제 지정
+        if '구분' not in df.columns:
+            df.columns = ["날짜", "구분", "카테고리", "내역", "금액"][:len(df.columns)]
+            
         df['날짜'] = pd.to_datetime(df['날짜']).dt.date
         df['금액'] = pd.to_numeric(df['금액'], errors='coerce').fillna(0).astype(int)
         return df
@@ -69,9 +73,11 @@ for i, tab in enumerate(tabs):
                     if day != 0:
                         curr = date(st.session_state.view_year, st.session_state.view_month, day)
                         d_df = df[df['날짜'] == curr] if not df.empty else pd.DataFrame()
-                        # '수입'만 +로, 나머지는 -로 계산
-                        inc = d_df[d_df['구분'] == '수입']['금액'].sum()
-                        exp = d_df[d_df['구분'] != '수입']['금액'].sum()
+                        
+                        # [계산] 수입 지출 구분
+                        inc = d_df[d_df['구분'] == '수입']['금액'].sum() if '구분' in d_df.columns else 0
+                        exp = d_df[d_df['구분'] != '수입']['금액'].sum() if '구분' in d_df.columns else 0
+                        
                         is_t = "today-marker" if curr == date.today() else ""
                         with w_cols[idx]:
                             itxt = f"<div class='cal-inc'>+{int(inc/10000)}m</div>" if inc >= 10000 else ""
@@ -91,26 +97,19 @@ for i, tab in enumerate(tabs):
             
             if st.button("입력", key=f"btn_{user}"):
                 if not m_i: st.warning("Item?"); st.stop()
-                
-                # 시트에 저장될 데이터 한 줄
                 new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": m_i, "금액": m_a}])
-                
-                # 저장 대상 시트 결정
-                if m_t == "우리": tgs = ["beom", "jyeon"]
-                elif m_t == "범지출": tgs = ["beom"]
-                elif m_t == "젼지출": tgs = ["jyeon"]
-                else: tgs = [user]
+                tgs = ["beom", "jyeon"] if m_t == "우리" else (["beom"] if m_t == "범지출" else (["jyeon"] if m_t == "젼지출" else [user]))
                 
                 for t in tgs:
                     try:
-                        # 1. 먼저 기존 데이터를 읽어옴
-                        existing_data = conn.read(worksheet=t, ttl=0)
-                        # 2. 새 데이터를 아래에 붙임
-                        updated_df = pd.concat([existing_data, new_row], ignore_index=True)
-                        # 3. 시트 전체를 업데이트
-                        conn.update(worksheet=t, data=updated_df)
-                    except Exception:
-                        # 위 과정에서 에러나면 강제로 새 줄만이라도 입력 시도
+                        # [저장 보강] 시트가 비었든 깨졌든 강제로 틀을 만들어서 저장
+                        existing = conn.read(worksheet=t, ttl=0)
+                        if existing is None or existing.empty:
+                            updated = new_row
+                        else:
+                            updated = pd.concat([existing, new_row], ignore_index=True)
+                        conn.update(worksheet=t, data=updated)
+                    except:
                         conn.update(worksheet=t, data=new_row)
                 
                 st.success("OK")
