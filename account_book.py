@@ -6,21 +6,18 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 사파리가 절대 못 건드리는 가로 선택형 버튼 스타일
+# ✅ CSS: 모바일 사파리 맞춤형 레이아웃
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* 날짜 중앙 정렬 */
-    .top-date { text-align: center; font-size: 1.6rem !important; font-weight: 800; margin: 10px 0; }
-
-    /* 7열 달력 그리드 고정 */
+    /* 달력 본체 7열 고정 */
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         gap: 2px;
         width: 100%;
-        margin-bottom: 15px;
+        margin-top: 10px;
     }
     .day-header { font-size: 0.75rem; font-weight: bold; text-align: center; color: #888; }
     .cal-day { 
@@ -33,17 +30,9 @@ st.markdown("""
     .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
 
-    /* 가로형 선택 버튼(라디오) 강제 스타일링 */
-    div[data-testid="stHorizontalBlock"] {
-        gap: 0px !important;
-    }
-    
-    /* 버튼 텍스트 크기 키우기 */
-    .stButton > button {
-        font-size: 1.5rem !important;
-        height: 55px !important;
-        border: 1px solid #ddd !important;
-    }
+    /* 선택 상자 라벨 숨기기 및 간격 조정 */
+    div[data-testid="stSelectbox"] label { display: none; }
+    div[data-testid="stHorizontalBlock"] { gap: 5px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -64,14 +53,9 @@ def format_man(amount):
     val = round(amount / 10000, 1)
     return f"{int(val) if val == int(val) else val}만"
 
+# 현재 날짜 기준 초기화
 if 'view_year' not in st.session_state: st.session_state.view_year = datetime.now().year
 if 'view_month' not in st.session_state: st.session_state.view_month = datetime.now().month
-
-def change_month(delta):
-    new_month = st.session_state.view_month + delta
-    if new_month > 12: st.session_state.view_year += 1; st.session_state.view_month = 1
-    elif new_month < 1: st.session_state.view_year -= 1; st.session_state.view_month = 12
-    else: st.session_state.view_month = new_month
 
 st.title("📔 범 & 젼")
 user_tabs = st.tabs(["범", "젼"])
@@ -84,7 +68,14 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            st.markdown(f"<div class='top-date'>{st.session_state.view_year}년 {st.session_state.view_month}월</div>", unsafe_allow_html=True)
+            # ✅ [연도/월 선택] 5:5로 배치 - 사파리에서도 이 정도는 안 깨집니다!
+            sel_col1, sel_col2 = st.columns(2)
+            with sel_col1:
+                year_list = list(range(datetime.now().year - 1, datetime.now().year + 3))
+                st.session_state.view_year = st.selectbox("연도", year_list, index=year_list.index(st.session_state.view_year), key=f"sel_y_{user}")
+            with sel_col2:
+                month_list = list(range(1, 13))
+                st.session_state.view_month = st.selectbox("월", month_list, index=month_list.index(st.session_state.view_month), key=f"sel_m_{user}")
 
             # 달력 본체
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
@@ -107,16 +98,8 @@ for i, tab in enumerate(user_tabs):
             grid_html += '</div>'
             st.markdown(grid_html, unsafe_allow_html=True)
             
-            # ✅ [최후의 수단] 세로로 절대 안 깨지는 가로 버튼 레이아웃
-            # 버튼을 아주 작게 만들어서 강제로 한 줄에 쑤셔 넣기
-            cols = st.columns([1, 1, 8, 1, 1]) # 양옆에 큰 여백을 줘서 사파리가 '좁다'고 못 느끼게 함
-            with cols[1]:
-                if st.button("◀", key=f"btn_p_{user}"): change_month(-1); st.rerun()
-            with cols[3]:
-                if st.button("▶", key=f"btn_n_{user}"): change_month(1); st.rerun()
-            
         else:
-            # 리스트 보기
+            # 목록 보기 (생략 없이 유지)
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
