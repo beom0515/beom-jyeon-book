@@ -6,7 +6,7 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# CSS 스타일 (이전과 동일하되 목록 가독성 추가)
+# CSS 스타일
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
@@ -44,10 +44,10 @@ st.markdown("""
     .cal-inc { color: #1f77b4; font-size: 0.65rem; font-weight: bold; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
     
-    /* 목록 보기 카드 스타일 */
+    /* 목록 카드 스타일 */
     .record-card { 
         background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #eee; 
-        margin-bottom: 6px; border-left: 5px solid #007bff;
+        margin-bottom: 6px; border-left: 5px solid #007bff; position: relative;
     }
     div[data-testid="stSelectbox"] label { display: none; }
     </style>
@@ -78,7 +78,6 @@ def format_man(amount):
     val = round(amount / 10000, 1)
     return f"{int(val) if val == int(val) else val}만"
 
-# 초기값 세팅
 if 'view_year' not in st.session_state: st.session_state.view_year = 2026
 if 'view_month' not in st.session_state: st.session_state.view_month = 2
 
@@ -89,9 +88,9 @@ calendar.setfirstweekday(calendar.SUNDAY)
 for i, user in enumerate(["beom", "jyeon"]):
     with user_tabs[i]:
         df = load_data(user)
-        v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_{user}", label_visibility="collapsed")
+        v_mode = st.radio("모드", ["📅", "📋"], horizontal=True, key=f"v_{user}", label_visibility="collapsed")
         
-        # 1. 상단 공통 연/월 선택창
+        # 상단 연/월 선택
         c1, c2 = st.columns(2)
         with c1: 
             y_list = [f"{y}년" for y in range(2024, 2029)]
@@ -101,14 +100,13 @@ for i, user in enumerate(["beom", "jyeon"]):
             sel_m = st.selectbox("M", [f"{m}월" for m in range(1, 13)], index=st.session_state.view_month-1, key=f"m_{user}")
             st.session_state.view_month = int(sel_m.replace("월", ""))
 
-        # 2. 데이터 필터링 및 요약
         df_view = df[(df['날짜'].apply(lambda x: x.year) == st.session_state.view_year) & (df['날짜'].apply(lambda x: x.month) == st.session_state.view_month)] if not df.empty else pd.DataFrame()
         t_inc, t_exp = df_view[df_view['구분'] == '수입']['금액'].sum(), df_view[df_view['구분'] != '수입']['금액'].sum()
 
         st.markdown(f'<div class="summary-box"><div class="summary-item">수입 <span class="val-inc">+{t_inc:,}</span></div><div class="summary-item">지출 <span class="val-exp">-{t_exp:,}</span></div><div class="summary-item">잔액 <b>{t_inc-t_exp:,}</b></div></div>', unsafe_allow_html=True)
 
         if v_mode == "📅":
-            # 달력 모드 (기존과 동일)
+            # 달력 모드
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
             grid = '<div class="calendar-grid">'
             for idx, h in enumerate(["일", "월", "화", "수", "목", "금", "토"]):
@@ -132,22 +130,33 @@ for i, user in enumerate(["beom", "jyeon"]):
             st.markdown(grid + '</div>', unsafe_allow_html=True)
             
         else:
-            # 📋 목록 모드: 빠른 날짜가 위로 오게 정렬
+            # 📋 목록 모드 (삭제 버튼 포함)
             if not df_view.empty:
-                df_sorted = df_view.sort_values(by="날짜", ascending=True) # 오름차순 정렬
+                df_sorted = df_view.sort_values(by="날짜", ascending=True)
                 for idx, row in df_sorted.iterrows():
-                    st.markdown(f"""
-                        <div class="record-card">
-                            <div style="display:flex; justify-content:space-between; font-size:0.85rem;">
-                                <span><b>{row['날짜'].strftime('%m/%d')}</b> ({row['구분']})</span>
-                                <span style="color:#666;">{row['카테고리']}</span>
+                    col_text, col_del = st.columns([0.85, 0.15])
+                    with col_text:
+                        st.markdown(f"""
+                            <div class="record-card">
+                                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#666;">
+                                    <span><b>{row['날짜'].strftime('%m/%d')}</b> ({row['구분']})</span>
+                                    <span>{row['카테고리']}</span>
+                                </div>
+                                <div style="font-size:1rem; font-weight:bold; margin-top:2px;">{row['금액']:,}원</div>
+                                <div style="font-size:0.75rem; color:#444;">📝 {row['내역']}</div>
                             </div>
-                            <div style="font-size:1.05rem; font-weight:bold; margin-top:3px;">
-                                {row['금액']:,}원
-                            </div>
-                            <div style="font-size:0.8rem; color:#444; margin-top:2px;">📝 {row['내역']}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
+                    with col_del:
+                        st.write("") # 간격 맞추기
+                        if st.button("🗑️", key=f"del_{user}_{idx}"):
+                            full_df = load_data(user)
+                            # 날짜, 구분, 금액, 내역이 모두 일치하는 행 삭제
+                            full_df = full_df.drop(full_df[(full_df['날짜'] == row['날짜']) & 
+                                                          (full_df['구분'] == row['구분']) & 
+                                                          (full_df['금액'] == row['금액']) & 
+                                                          (full_df['내역'] == row['내역'])].index)
+                            conn.update(worksheet=user, data=full_df)
+                            st.rerun()
             else:
                 st.info(f"{st.session_state.view_month}월 내역이 없습니다.")
 
@@ -156,18 +165,20 @@ for i, user in enumerate(["beom", "jyeon"]):
             col1, col2 = st.columns(2)
             with col1: sd = st.date_input("날짜", value=date.today(), key=f"d_{user}")
             with col2: mt = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"t_{user}")
-            c_list = ["용돈", "기타"] if mt == "수입" else ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타"]
-            mc = st.selectbox("카테고리", c_list, key=f"c_{user}")
+            clist = ["용돈", "기타"] if mt == "수입" else ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타"]
+            mc = st.selectbox("카테고리", clist, key=f"c_{user}")
             ma = st.number_input("금액", min_value=0, step=1000, key=f"a_{user}")
             mi = st.text_input("상세내역", key=f"i_{user}")
             if st.button("저장", key=f"s_{user}", use_container_width=True):
                 info = mi if mi.strip() != "" else mc
                 if mt == "우리":
                     split = int(ma // 2)
-                    row = pd.DataFrame([{"날짜": sd.strftime("%Y-%m-%d"), "구분": "우리", "카테고리": mc, "내역": info, "금액": split}])
+                    new_row = pd.DataFrame([{"날짜": sd, "구분": "우리", "카테고리": mc, "내역": info, "금액": split}])
                     for t in ["beom", "jyeon"]:
-                        upd = pd.concat([load_data(t), row], ignore_index=True); conn.update(worksheet=t, data=upd)
+                        upd = pd.concat([load_data(t), new_row], ignore_index=True)
+                        conn.update(worksheet=t, data=upd)
                 else:
-                    row = pd.DataFrame([{"날짜": sd.strftime("%Y-%m-%d"), "구분": mt, "카테고리": mc, "내역": info, "금액": ma}])
-                    upd = pd.concat([load_data(user), row], ignore_index=True); conn.update(worksheet=user, data=upd)
+                    new_row = pd.DataFrame([{"날짜": sd, "구분": mt, "카테고리": mc, "내역": info, "금액": ma}])
+                    upd = pd.concat([load_data(user), new_row], ignore_index=True)
+                    conn.update(worksheet=user, data=upd)
                 st.rerun()
