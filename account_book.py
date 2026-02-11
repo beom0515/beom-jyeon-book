@@ -141,3 +141,10 @@ for i, tab in enumerate(tabs):
                     updated_df = pd.concat([current_df, new_data], ignore_index=True)
                     conn.update(worksheet=t, data=updated_df)
                 st.rerun()
+# 데이터가 있거나 '구분' 컬럼이 존재할 때만 계산
+                        if not d_df.empty and '구분' in d_df.columns:
+                            inc = d_df[d_df['구분'] == '수입']['금액'].sum()
+                            exp = d_df[d_df['구분'] != '수입']['금액'].sum()
+                        else:
+                            inc = 0
+                            exp = 0
