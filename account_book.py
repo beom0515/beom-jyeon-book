@@ -109,10 +109,8 @@ for i, tab in enumerate(user_tabs):
         st.write("---")
         with st.expander("+ 내역 추가", expanded=True):
             sel_d = st.date_input("날짜", value=date.today(), key=f"date_{user}")
-            # 1. 구분 먼저 선택
             m_t = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"type_{user}")
             
-            # 2. 구분에 따라 카테고리 리스트 변경 (필터링 로직)
             if m_t == "수입":
                 c_list = ["용돈", "기타"]
             else:
@@ -122,17 +120,31 @@ for i, tab in enumerate(user_tabs):
             m_a = st.number_input("금액(원)", min_value=0, step=1000, key=f"amt_{user}")
             m_i = st.text_input("상세내역", key=f"info_{user}")
             
-            if st.button("저장하기", key=f"save_{user}", use_container_width=True):
+            # ✅ '저장하기' -> '저장'으로 버튼 명칭 변경
+            if st.button("저장", key=f"save_{user}", use_container_width=True):
                 final_info = m_i if m_i.strip() != "" else m_c
-                new_row = pd.DataFrame([{
-                    "날짜": sel_d.strftime("%Y-%m-%d"), 
-                    "구분": m_t, 
-                    "카테고리": m_c, 
-                    "내역": final_info, 
-                    "금액": m_a
-                }])
                 
-                targets = ["beom", "jyeon"] if m_t == "우리" else ([user])
+                # ✅ '우리' 선택 시 금액 1/2 분할 로직 (1원 미만 버림)
+                if m_t == "우리":
+                    split_amt = int(m_a // 2)
+                    new_row = pd.DataFrame([{
+                        "날짜": sel_d.strftime("%Y-%m-%d"), 
+                        "구분": "우리", 
+                        "카테고리": m_c, 
+                        "내역": final_info, 
+                        "금액": split_amt
+                    }])
+                    targets = ["beom", "jyeon"]
+                else:
+                    new_row = pd.DataFrame([{
+                        "날짜": sel_d.strftime("%Y-%m-%d"), 
+                        "구분": m_t, 
+                        "카테고리": m_c, 
+                        "내역": final_info, 
+                        "금액": m_a
+                    }])
+                    targets = [user]
+
                 for t in targets:
                     curr_df = load_data(t)
                     upd_df = pd.concat([curr_df, new_row], ignore_index=True)
