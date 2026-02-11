@@ -6,7 +6,7 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# CSS: 깔끔한 디자인 유지
+# CSS: 디자인 유지
 st.markdown("""
     <style>
     .cal-day { border: 1px solid #eee; height: 85px; padding: 3px; border-radius: 8px; background-color: #fdfdfd; }
@@ -114,11 +114,21 @@ for i, tab in enumerate(tabs):
             m_t = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"type_{user}")
             c_list = ["용돈", "기타"] if m_t == "수입" else ["식비", "교통", "여가", "생필품", "주식", "열매", "통신", "기타"]
             m_c = st.selectbox("카테고리", c_list, key=f"cat_{user}")
-            # ✅ step=1000으로 설정하여 1000원 단위로 움직이게 함
             m_a = st.number_input("금액(원)", min_value=0, step=1000, key=f"amt_{user}")
             m_i = st.text_input("상세 내역", key=f"item_{user}")
+            
             if st.button("입력", key=f"save_{user}"):
-                new_row = pd.DataFrame([{"날짜": sel_d.strftime("%Y-%m-%d"), "구분": m_t, "카테고리": m_c, "내역": m_i, "금액": m_a}])
+                # ✅ 상세 내역이 비어있으면 카테고리 이름을 사용
+                final_item_name = m_i if m_i.strip() != "" else m_c
+                
+                new_row = pd.DataFrame([{
+                    "날짜": sel_d.strftime("%Y-%m-%d"), 
+                    "구분": m_t, 
+                    "카테고리": m_c, 
+                    "내역": final_item_name, 
+                    "금액": m_a
+                }])
+                
                 targets = ["beom", "jyeon"] if m_t == "우리" else (["beom"] if m_t == "범지출" else (["jyeon"] if m_t == "젼지출" else [user]))
                 for t in targets:
                     current_df = load_data(t)
