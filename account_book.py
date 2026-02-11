@@ -6,18 +6,27 @@ import calendar
 
 st.set_page_config(page_title="범 & 젼", layout="wide")
 
-# ✅ CSS: 날짜 중앙 정렬 및 버튼 2분할 고정
+# ✅ CSS: 절대 줄바꿈 금지 및 삼각형 버튼 스타일
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; max-width: 100% !important; }
     
-    /* 날짜 제목 중앙 정렬 */
+    /* 상단 네비게이션 테이블 구조 (강제 한 줄) */
+    .nav-table {
+        width: 100%;
+        max-width: 320px; /* 7일 칸 전체 폭보다 약간 좁게 제한 */
+        margin: 0 auto 10px auto;
+        border-collapse: collapse;
+    }
+    .nav-td-btn { width: 25%; text-align: center; }
+    .nav-td-date { width: 50%; text-align: center; vertical-align: middle; }
+    
     .month-header {
-        text-align: center;
-        font-size: 1.6rem !important;
+        font-size: 1.3rem !important;
         font-weight: 800;
-        margin-bottom: 5px;
         color: #333;
+        margin: 0;
+        white-space: nowrap;
     }
 
     /* 7열 달력 그리드 강제 고정 */
@@ -38,11 +47,12 @@ st.markdown("""
     .cal-inc { color: #1f77b4; font-size: 0.6rem; font-weight: bold; line-height: 1; }
     .today-marker { background-color: #fff9e6; border: 1.5px solid #ffcc00; }
     
-    /* 버튼 2분할 스타일 조정 */
-    div[data-testid="stHorizontalBlock"] button {
-        height: 45px !important;
+    /* Streamlit 버튼 스타일 강제 오버라이드 (삼각형 버튼용) */
+    .stButton > button {
+        padding: 0 !important;
+        height: 40px !important;
         font-size: 1.2rem !important;
-        font-weight: bold !important;
+        border-radius: 8px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -84,17 +94,16 @@ for i, tab in enumerate(user_tabs):
         v_mode = st.radio("보기", ["📅", "📋"], horizontal=True, key=f"v_mode_{user}", label_visibility="collapsed")
         
         if v_mode == "📅":
-            # 1. 날짜 표시 (중앙)
+            # ✅ 날짜를 먼저 중앙에 배치
             st.markdown(f"<div class='month-header'>{st.session_state.view_year}년 {st.session_state.view_month}월</div>", unsafe_allow_html=True)
             
-            # 2. 버튼 2분할 ( < / > )
-            btn_c1, btn_c2 = st.columns(2)
-            with btn_c1:
-                if st.button("<", key=f"p_{user}", use_container_width=True):
-                    change_month(-1); st.rerun()
-            with btn_c2:
-                if st.button(">", key=f"n_{user}", use_container_width=True):
-                    change_month(1); st.rerun()
+            # ✅ 버튼을 날짜 바로 아래에 ◀ ▶ 기호만 써서 좁은 폭으로 배치
+            # 여백을 주어 7일 칸보다 좁게 보이도록 컬럼 구성
+            empty1, b1, b2, empty2 = st.columns([1, 1, 1, 1])
+            with b1:
+                if st.button("◀", key=f"p_{user}"): change_month(-1); st.rerun()
+            with b2:
+                if st.button("▶", key=f"n_{user}"): change_month(1); st.rerun()
 
             # 3. 달력 그리드
             cal = calendar.monthcalendar(st.session_state.view_year, st.session_state.view_month)
@@ -118,7 +127,7 @@ for i, tab in enumerate(user_tabs):
             st.markdown(grid_html, unsafe_allow_html=True)
             
         else:
-            # 목록 보기 (생략)
+            # 목록 보기 (생략 없이 유지)
             if not df.empty:
                 display_df = df.sort_values('날짜', ascending=False).reset_index()
                 for idx, row in display_df.iterrows():
@@ -134,7 +143,6 @@ for i, tab in enumerate(user_tabs):
             else: st.info("내역 없음")
 
         st.write("---")
-        # 입력 섹션 (기존과 동일)
         with st.expander("+", expanded=True):
             sel_d = st.date_input("날짜", value=date.today(), key=f"date_{user}")
             m_t = st.selectbox("구분", ["우리", "범지출", "젼지출", "수입"], key=f"type_{user}")
